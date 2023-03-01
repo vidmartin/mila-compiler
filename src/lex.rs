@@ -113,6 +113,14 @@ impl<S: Iterator<Item = char>> Lexer<S> {
 
     fn lex_num(&mut self, radix: u32) -> Option<Token> {
         let mut val: i64 = 0;
+
+        if let Some(ch) = self.curr_char {
+            if !ch.is_digit(radix) {
+                self.unexpected(ch);
+                return None;
+            }
+        }
+
         while let Some(ch) = self.curr_char {
             if let Some(dig) = ch.to_digit(radix) {
                 val *= radix as i64;
@@ -122,6 +130,14 @@ impl<S: Iterator<Item = char>> Lexer<S> {
                 break;
             }
         }
+
+        if let Some(ch) = self.curr_char {
+            if ch.is_alphanumeric() {
+                self.unexpected(ch);
+                return None;
+            }
+        }
+        
         return Some(Token::LitInt(val));
     }
 }
