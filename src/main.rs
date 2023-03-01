@@ -1,15 +1,21 @@
 
 mod tokens;
+mod lex;
+
+use std::io::{stdin, Read};
+use tokens::*;
+use lex::*;
 
 fn main() {
-    println!("{}{}", tokens::Token::KwProgram, tokens::Token::Ident(String::from("hello")));
+    let mut s = String::new();
+    stdin().read_to_string(&mut s).unwrap();
 
-    let s1: &'static str = "hello";
-    let s2: &'static str = "hello";
+    let mut lexer = lex::Lexer::new(s.as_str().chars());
+    while let Some(tok) = lexer.next() {
+        println!("{}", tok);
+    }
 
-    if s1 == s2 {
-        println!("same");
-    } else {
-        println!("not same");
+    if let Some(err) = lexer.get_error() {
+        println!("lex error! {}", err);
     }
 }
