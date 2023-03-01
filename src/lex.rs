@@ -48,12 +48,8 @@ impl<S: Iterator<Item = char>> Lexer<S> {
     pub fn get_error(&self) -> Option<LexError> {
         self.error
     }
-}
 
-impl<S: Iterator<Item = char>> Iterator for Lexer<S> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn lex(&mut self) -> Option<Token> {
         while let Some(true) = self.curr_char.map(|c| c.is_whitespace()) {
             self.advance(); // skip whitespaces
         }
@@ -109,5 +105,13 @@ impl<S: Iterator<Item = char>> Iterator for Lexer<S> {
         // was reached in the match statement above:
         self.advance();
         return Some(tok);
+    }
+}
+
+impl<S: Iterator<Item = char>> Iterator for Lexer<S> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.lex()
     }
 }
