@@ -89,8 +89,12 @@ impl<S: Iterator<Item = char>> Lexer<S> {
             '+' => Token::TkAdd,
             '-' => Token::TkSub,
             '*' => Token::TkMul,
-            c if c.is_digit(10) => {
-                todo!() // numbers
+            c if c == '$' || c == '&' => {
+                self.advance()?;
+                return self.lex_num(if c == '$' { 16 } else { 8 });
+            },
+            c if c.is_digit(10) => { 
+                return self.lex_num(10); 
             },
             c if c.is_alphabetic() || c == '_' => {
                 todo!() // identifiers & keywords
@@ -105,6 +109,20 @@ impl<S: Iterator<Item = char>> Lexer<S> {
         // was reached in the match statement above:
         self.advance();
         return Some(tok);
+    }
+
+    fn lex_num(&mut self, radix: u32) -> Option<Token> {
+        let mut val: i64 = 0;
+        while let Some(ch) = self.curr_char {
+            if let Some(dig) = ch.to_digit(radix) {
+                val *= radix as i64;
+                val += dig as i64;
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        return Some(Token::LitInt(val));
     }
 }
 
