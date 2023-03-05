@@ -138,3 +138,33 @@ impl fmt::Display for Token {
         write!(f, "<{:?}>", *self)
     }
 }
+
+pub fn parse_kw(s: &str) -> Option<Token> {
+    Some(
+        match s {
+            "program"   => Token::KwProgram,
+            "var"       => Token::KwVar,
+            "array"     => Token::KwArray,
+            "of"        => Token::KwOf,
+            "begin"     => Token::KwBegin,
+            "end"       => Token::KwEnd,
+            "for"       => Token::KwFor,
+            "do"        => Token::KwDo,
+            "if"        => Token::KwIf,
+            "then"      => Token::KwThen,
+            "to"        => Token::KwTo,
+            "downto"    => Token::KwDownto,
+            "div"       => Token::KwDiv,
+            "mod"       => Token::KwMod,
+            "const"     => Token::KwConst,
+            "function"  => Token::KwFunction,
+            "while"     => Token::KwWhile,
+            "procedure" => Token::KwProcedure,
+            "exit"      => Token::KwExit,
+            "or"        => Token::KwOr,
+            "and"       => Token::KwAnd,
+            "not"       => Token::KwNot,
+            _           => None?
+        }
+    )
+}

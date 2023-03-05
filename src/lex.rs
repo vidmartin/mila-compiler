@@ -1,7 +1,7 @@
 
 use std::io::Read;
 
-use crate::tokens::Token;
+use crate::tokens::{Token, self};
 
 #[derive(Clone, Copy)]
 pub enum LexError {
@@ -97,7 +97,10 @@ impl<S: Iterator<Item = char>> Lexer<S> {
                 return self.lex_num(10); 
             },
             c if c.is_alphabetic() || c == '_' => {
-                todo!() // identifiers & keywords
+                return self.lex_ident().map(|tok| match tok {
+                    Token::Ident(ref s) => tokens::parse_kw(s).unwrap_or(tok),
+                    _ => tok,
+                });
             },
             c => {
                 self.unexpected(c);
@@ -109,6 +112,21 @@ impl<S: Iterator<Item = char>> Lexer<S> {
         // was reached in the match statement above:
         self.advance();
         return Some(tok);
+    }
+
+    fn lex_ident(&mut self) -> Option<Token> {
+        let mut ident = String::new();
+
+        while let Some(ch) = self.curr_char {
+            if ch.is_alphanumeric() || ch == '_' {
+                ident.push(ch);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        return Some(Token::Ident(ident));
     }
 
     fn lex_num(&mut self, radix: u32) -> Option<Token> {
