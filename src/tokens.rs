@@ -69,6 +69,9 @@ pub enum Token {
     /// the "not" keyword
     /// used as logical NOT operator
     KwNot,
+    /// the "forward" keyword
+    /// used for forward declarations
+    KwForward, // TODO: update lexer
 
     /// the ":" token
     /// used to annotate data types

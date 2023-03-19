@@ -1,0 +1,123 @@
+Program -> kwProgram ident ; Declarations Block .
+
+Declarations -> 
+Declarations -> Declaration Declarations
+
+Declaration -> Function
+Declaration -> Procedure
+Declaration -> Constants
+Declaration -> Variables
+
+Function -> FunctionHeader MaybeVariables Block ; 
+Function -> FunctionHeader kwForward ;
+
+FunctionHeader -> kwFunction ident ( NamesWithTypes ) : ident ;
+
+Procedure -> ProcedureHeader MaybeVariables Block ;
+Procedure -> ProcedureHeader kwForward ;
+
+ProcedureHeader -> kwProcedure ident ( NamesWithTypes ) ;
+
+NamesWithTypes ->
+NamesWithTypes -> NamesWithType MoreNamesWithTypes
+
+MoreNamesWithTypes ->
+MoreNamesWithTypes -> ; NamesWithType MoreNamesWithTypes
+
+NamesWithType -> Names : Type
+
+Names -> ident MoreNames
+
+MoreNames ->
+MoreNames -> , ident MoreNames
+
+Type -> ident
+Type -> kwArray [ litInt .. litInt ] kwOf ident
+
+Variables -> kwVar NamesWithType MoreNamesWithType ;
+
+MaybeVariables ->
+MaybeVariables -> Variables
+
+Constants -> kwConst NamesWithType MoreNamesWithTypes ;
+
+Block -> kwBegin Statements kwEnd
+
+Statements ->
+Statements -> Statement ; Statements
+
+Statement -> Call
+Statement -> If
+Statement -> While
+Statement -> For
+Statement -> Assign
+Statement -> Block
+
+Call -> ident ( Params )
+
+Params ->
+Params -> Expression MoreParams
+
+MoreParams ->
+MoreParams -> , Expression MoreParams
+
+If -> kwIf Expression kwThen Statement MaybeElse
+
+MaybeElse ->
+MaybeElse -> Else
+
+Else -> kwElse Statement
+
+While -> kwWhile Expression kwDo Statement
+
+For -> kwFor ident := Range kwDo Statement
+
+Range -> litInt kwTo litInt
+Range -> litInt kwDownto litInt
+
+Expression -> E0 MoreE0
+
+MoreE0 -> 
+MoreE0 -> kwOr E0 MoreE0
+
+E0 -> E1 MoreE1
+
+MoreE1 ->
+MoreE1 -> kwAnd E1 MoreE1
+
+E1 -> E2
+E1 -> kwNot E2
+
+E2 -> E3 MoreE3
+
+MoreE3 ->
+MoreE3 -> = E3 MoreE3
+MoreE3 -> <> E3 MoreE3
+MoreE3 -> > E3 MoreE3
+MoreE3 -> < E3 MoreE3
+MoreE3 -> >= E3 MoreE3
+MoreE3 -> <= E3 MoreE3
+
+E3 -> E4 MoreE4
+
+MoreE4 ->
+MoreE4 -> + E4 MoreE4
+MoreE4 -> - E4 MoreE4
+
+E4 -> E5 MoreE5
+
+MoreE5 ->
+MoreE5 -> * E5 MoreE5
+MoreE5 -> kwDiv E5 MoreE5
+MoreE5 -> kwMod E5 MoreE5
+
+E5 -> E6
+E5 -> - E6
+
+E6 -> ( Expression )
+E6 -> Call
+E6 -> litInt
+E6 -> ident
+
+Assign -> ident := Expression
+
