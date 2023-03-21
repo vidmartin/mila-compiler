@@ -8,15 +8,16 @@ Declaration -> Procedure
 Declaration -> Constants
 Declaration -> Variables
 
-Function -> FunctionHeader MaybeVariables Block ; 
-Function -> FunctionHeader kwForward ;
+Function -> FunctionHeader FunctionOrProcedureRest
 
 FunctionHeader -> kwFunction ident ( NamesWithTypes ) : ident ;
 
-Procedure -> ProcedureHeader MaybeVariables Block ;
-Procedure -> ProcedureHeader kwForward ;
+Procedure -> ProcedureHeader FunctionOrProcedureRest
 
 ProcedureHeader -> kwProcedure ident ( NamesWithTypes ) ;
+
+FunctionOrProcedureRest -> MaybeVariables Block ;
+FunctionOrProcedureRest -> kwForward ;
 
 NamesWithTypes ->
 NamesWithTypes -> NamesWithType MoreNamesWithTypes
