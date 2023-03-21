@@ -115,9 +115,13 @@ E5 -> E6
 E5 -> - E6
 
 E6 -> ( Expression )
-E6 -> Call
 E6 -> litInt
-E6 -> ident
+E6 -> ReadOrCall
+
+ReadOrCall -> ident MaybeParams
+
+MaybeParams ->
+MaybeParams -> ( Params )
 
 Assign -> ident := Expression
 
