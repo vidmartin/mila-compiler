@@ -72,8 +72,10 @@ While -> kwWhile Expression kwDo Statement
 
 For -> kwFor ident := Range kwDo Statement
 
-Range -> litInt kwTo litInt
-Range -> litInt kwDownto litInt
+Range -> litInt RangeRest 
+
+RangeRest -> kwTo litInt
+RangeRest -> kwDownto litInt
 
 Expression -> E0 MoreE0
 
