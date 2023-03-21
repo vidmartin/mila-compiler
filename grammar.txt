@@ -46,14 +46,16 @@ Block -> kwBegin Statements kwEnd
 Statements ->
 Statements -> Statement ; Statements
 
-Statement -> Call
 Statement -> If
 Statement -> While
 Statement -> For
-Statement -> Assign
 Statement -> Block
+Statement -> AssignOrCallRest
 
-Call -> ident ( Params )
+AssignOrCall -> ident AssignOrCallRest
+
+AssignOrCallRest -> ( Params )
+AssignOrCallRest -> := Expression
 
 Params ->
 Params -> Expression MoreParams
@@ -120,10 +122,7 @@ E6 -> ( Expression )
 E6 -> litInt
 E6 -> ReadOrCall
 
-ReadOrCall -> ident MaybeParams
+ReadOrCall -> ident ReadOrCallRest
 
-MaybeParams ->
-MaybeParams -> ( Params )
-
-Assign -> ident := Expression
-
+ReadOrCallRest ->
+ReadOrCallRest -> ( Params )
