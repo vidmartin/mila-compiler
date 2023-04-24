@@ -22,6 +22,9 @@ FunctionOrProcedureRest -> kwForward ;
 NamesWithTypes ->
 NamesWithTypes -> NamesWithType MoreNamesWithTypes
 
+MoreNamesWithTypesSemicolon -> 
+MoreNamesWithTypesSemicolon -> NamesWithType MoreNamesWithTypesSemicolon ;
+
 MoreNamesWithTypes ->
 MoreNamesWithTypes -> ; NamesWithType MoreNamesWithTypes
 
@@ -40,7 +43,7 @@ Variables -> kwVar NamesWithType MoreNamesWithType ;
 MaybeVariables ->
 MaybeVariables -> Variables
 
-Constants -> kwConst NamesWithType MoreNamesWithTypes ;
+Constants -> kwConst NamesWithType MoreNamesWithTypesSemicolon ;
 
 Block -> kwBegin Statements kwEnd
 
