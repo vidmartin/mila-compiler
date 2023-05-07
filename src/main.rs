@@ -1,6 +1,8 @@
 
 mod tokens;
 mod lex;
+mod ast;
+mod syn;
 
 use std::io::{stdin, Read};
 use tokens::*;
@@ -58,9 +60,6 @@ fn llvm_test() {
 }
 
 fn main() {
-    llvm_test();
-    return;;
-
     let mut s = String::new();
     stdin().read_to_string(&mut s).unwrap();
 
