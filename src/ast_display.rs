@@ -3,11 +3,11 @@ use crate::ast;
 use std::fmt;
 
 fn indent(mut s: String, d: usize, dash: bool) -> String {
-    s = s.replace("\n", &(" ".repeat(d) + "\n"));
+    s = s.replace("\n", &("\n".to_string() + &" ".repeat(d)));
     if dash {
-        s.insert_str(0, &(" ".repeat(d - 3) + "-" + &" ".repeat(2) + "\n"));
+        s.insert_str(0, &(" ".repeat(d - 3) + "-" + &" ".repeat(2)));
     } else {
-        s.insert_str(0, &(" ".repeat(d) + "\n"));
+        s.insert_str(0, &(" ".repeat(d)));
     }
     return s;
 }
