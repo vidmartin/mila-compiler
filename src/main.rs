@@ -2,6 +2,7 @@
 mod tokens;
 mod lex;
 mod ast;
+mod ast_display;
 mod syn;
 
 use std::io::{stdin, Read};
@@ -64,11 +65,24 @@ fn main() {
     stdin().read_to_string(&mut s).unwrap();
 
     let mut lexer = lex::Lexer::new(s.as_str().chars());
+    println!("LEX OUTPUT:");
     while let Some(tok) = lexer.next() {
-        println!("{}", tok);
+        println!("    {}", tok);
     }
 
     if let Some(err) = lexer.get_error() {
         println!("lex error! {}", err);
+        return;
     }
+
+    println!();
+    let mut lexer = lex::Lexer::new(s.as_str().chars()).peekable();
+    let mut parser = syn::Parser::new(&mut lexer);
+    let parse_result = parser.parse_program();
+    println!("PARSE OUTPUT:");
+    match parse_result {
+        Ok(node) => println!("{}", ast::ASTNode::Program(node)),
+        Err(err) => println!("{:?}", err),
+    }
+
 }

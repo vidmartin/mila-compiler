@@ -1,6 +1,4 @@
 
-use std::collections::HashMap;
-
 pub enum ASTNode {
     Program(ProgramNode),
 }

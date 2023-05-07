@@ -14,7 +14,7 @@ pub enum SyntaxError {
 
 pub type ParseResult<TNode> = Result<TNode, SyntaxError>;
 
-struct Parser<'a, TLex : Iterator<Item = Token>> {
+pub struct Parser<'a, TLex : Iterator<Item = Token>> {
     lex: &'a mut Peekable<TLex>,
 }
 
