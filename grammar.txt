@@ -38,7 +38,10 @@ MoreNames -> , ident MoreNames
 Type -> ident
 Type -> kwArray [ litInt .. litInt ] kwOf ident
 
-Variables -> kwVar NamesWithType MoreNamesWithType ;
+Variables -> kwVar NamesWithType ; MoreNamesWithTypes2
+
+MoreNamesWithTypes2 -> NamesWithType ; MoreNamesWithTypes2
+MoreNamesWithTypes2 -> 
 
 MaybeVariables ->
 MaybeVariables -> Variables
