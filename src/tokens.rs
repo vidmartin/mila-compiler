@@ -127,6 +127,9 @@ pub enum Token {
     /// the "-" token
     /// used as subtraction operator
     TkSub,
+    /// the "," token
+    /// used to separate variable names
+    TkComma,
 
     /// any valid identifier that is not also a keyword
     /// might refer to a function, variable, constant, data type, ...

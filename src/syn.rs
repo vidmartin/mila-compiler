@@ -3,7 +3,11 @@ use crate::tokens::*;
 use crate::ast::*;
 use std::iter::Peekable;
 
+#[derive(Debug)]
 pub enum SyntaxError {
+    Expected { expected: Token, gotten: Token },
+    ExpectedIdentifier { gotten: Token },
+    ExpectedIntLiteral { gotten: Token },
     Unexpected(Token),
     UnexpectedEnd,
 }
@@ -25,7 +29,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 if tok == *token {
                     Ok(())
                 } else {
-                    Err(SyntaxError::Unexpected(tok))
+                    Err(SyntaxError::Expected {
+                        expected: token.clone(),
+                        gotten: tok,
+                    })
                 }
             },
             None => Err(SyntaxError::UnexpectedEnd),
@@ -35,7 +42,9 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     fn expect_identifier(&mut self) -> ParseResult<String> {
         match self.lex.next() {
             Some(Token::Ident(s)) => Ok(s),
-            Some(tok) => Err(SyntaxError::Unexpected(tok)),
+            Some(tok) => Err(SyntaxError::ExpectedIdentifier {
+                gotten: tok,
+            }),
             None => Err(SyntaxError::UnexpectedEnd),
         }
     }
@@ -43,7 +52,9 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     fn expect_int_lit(&mut self) -> ParseResult<i64> {
         match self.lex.next() {
             Some(Token::LitInt(i)) => Ok(i),
-            Some(tok) => Err(SyntaxError::Unexpected(tok)),
+            Some(tok) => Err(SyntaxError::ExpectedIntLiteral {
+                gotten: tok,
+            }),
             None => Err(SyntaxError::UnexpectedEnd),
         }
     }
@@ -73,10 +84,118 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_declarations(&mut self) -> ParseResult<ProgramDeclarations> {
-        todo!()
+        match self.lex.peek() {
+            Some(Token::KwConst | Token::KwVar | Token::KwFunction | Token::KwProcedure) => {
+                let first_declaration = self.parse_declaration()?;
+                let mut rest_of_declarations = self.parse_declarations()?;
+                match first_declaration {
+                    Declaration::Variables(mut storage_nodes) => rest_of_declarations.variables.append(&mut storage_nodes),
+                    Declaration::Constants(mut storage_nodes) => rest_of_declarations.constants.append(&mut storage_nodes),
+                    Declaration::Function(callable_node) | Declaration::Procedure(callable_node) => rest_of_declarations.callables.push(callable_node),
+                };
+                Ok(rest_of_declarations)
+            },
+            Some(Token::KwBegin) => {
+                Ok(ProgramDeclarations {
+                    variables: Vec::new(),
+                    constants: Vec::new(),
+                    callables: Vec::new()
+                })
+            }
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_declaration(&mut self) -> ParseResult<Declaration> {
+        match self.lex.peek() {
+            Some(Token::KwFunction) => todo!(),
+            Some(Token::KwProcedure) => todo!(),
+            Some(Token::KwConst) => todo!(),
+            Some(Token::KwVar) => Ok(Declaration::Variables(self.parse_variables()?)),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
+        self.expect_token(&Token::KwVar)?;
+        let mut names_with_type = self.parse_names_with_type()?;
+        self.expect_token(&Token::TkSemicolon)?;
+        let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
+        names_with_type.append(&mut more_names_with_types_2);
+
+        Ok(
+            names_with_type.into_iter().map(
+                |(name, typename)| StorageDeclarationNode {
+                    dtype: typename,
+                    name: name,
+                }
+            ).collect()
+        )
+    }
+
+    pub fn parse_names_with_type(&mut self) -> ParseResult<Vec<(String, String)>> {
+        let names = self.parse_names()?;
+        self.expect_token(&Token::TkColon);
+        let typename = self.parse_type()?;
+
+        Ok(names.into_iter().map(|name| (name, typename.clone())).collect())
+    }
+
+    pub fn parse_names(&mut self) -> ParseResult<Vec<String>> {
+        let first_name = self.expect_identifier()?;
+        let mut more_names = self.parse_more_names()?;
+        more_names.insert(0, first_name);
+
+        Ok(more_names)
+    }
+
+    pub fn parse_more_names(&mut self) -> ParseResult<Vec<String>> {
+        match self.lex.peek() {
+            Some(Token::TkColon) => Ok(Vec::new()),
+            Some(Token::TkComma) => {
+                self.expect_token(&Token::TkComma)?;
+                let first_name = self.expect_identifier()?;
+                let mut more_names = self.parse_more_names()?;
+                more_names.insert(0, first_name);
+                Ok(more_names)
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_type(&mut self) -> ParseResult<String> {
+        let typename = self.expect_identifier()?;
+        return Ok(typename);
+
+        // TODO: ARRAYS!
+    }
+
+    pub fn parse_more_names_with_types_2(&mut self) -> ParseResult<Vec<(String, String)>> {
+        match self.lex.peek() {
+            Some(Token::Ident(name)) => {
+                let mut names_with_type = self.parse_names_with_type()?;
+                self.expect_token(&Token::TkSemicolon)?;
+                let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
+                names_with_type.append(&mut more_names_with_types_2);
+                Ok(names_with_type)
+            },
+            Some(Token::KwConst | Token::KwVar | Token::KwFunction | Token::KwProcedure | Token::KwBegin) => Ok(Vec::new()),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 
     pub fn parse_block(&mut self) -> ParseResult<StatementBlockNode> {
         todo!()
     }
+}
+
+enum Declaration {
+    Variables(Vec<StorageDeclarationNode>),
+    Constants(Vec<StorageDeclarationNode>),
+    Function(CallableDeclarationNode),
+    Procedure(CallableDeclarationNode)
 }

@@ -89,6 +89,7 @@ impl<S: Iterator<Item = char>> Lexer<S> {
             '+' => Token::TkAdd,
             '-' => Token::TkSub,
             '*' => Token::TkMul,
+            ',' => Token::TkComma,
             c if c == '$' || c == '&' => {
                 self.advance()?;
                 return self.lex_num(if c == '$' { 16 } else { 8 });
