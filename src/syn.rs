@@ -189,6 +189,29 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_block(&mut self) -> ParseResult<StatementBlockNode> {
+        self.expect_token(&Token::KwBegin)?;
+        let statements = self.parse_statements()?;
+        self.expect_token(&Token::KwEnd)?;
+
+        Ok(StatementBlockNode { statements: statements })
+    }
+
+    pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
+        match self.lex.peek() {
+            Some(Token::KwEnd) => Ok(Vec::new()),
+            Some(Token::KwBegin | Token::KwIf | Token::KwWhile | Token::KwFor | Token::Ident(_)) => {
+                let first_statement = self.parse_statement()?;
+                self.expect_token(&Token::TkSemicolon)?;
+                let mut more_statements = self.parse_statements()?;
+                more_statements.insert(0, first_statement);
+                Ok(more_statements)
+            }
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_statement(&mut self) -> ParseResult<StatementNode> {
         todo!()
     }
 }
