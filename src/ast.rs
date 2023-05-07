@@ -12,7 +12,9 @@ pub enum StatementNode {
 }
 
 pub enum ExpressionNode {
-    Call(CallNode)
+    Call(CallNode),
+    LitInt(i64),
+    Access(String),
 }
 
 /// top level node for the entire program

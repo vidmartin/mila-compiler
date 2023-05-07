@@ -212,6 +212,81 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_statement(&mut self) -> ParseResult<StatementNode> {
+        match self.lex.peek() {
+            Some(Token::KwIf) => todo!(),
+            Some(Token::KwWhile) => todo!(),
+            Some(Token::KwFor) => todo!(),
+            Some(Token::KwBegin) => todo!(),
+            Some(Token::Ident(s)) => {
+                todo!();
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_assign_or_call(&mut self) -> ParseResult<StatementNode> {
+        let target = self.expect_identifier()?;
+        match self.parse_assign_or_call_rest()? {
+            AssignOrCall::Assign(lhs) => Ok(
+                StatementNode::Assignment(
+                    AssignmentNode { varname: target, value: lhs }
+                )
+            ),
+            AssignOrCall::Call(params) => Ok(
+                StatementNode::Expression(
+                    ExpressionNode::Call(
+                        CallNode { callable_name: target, params: params }
+                    )
+                )
+            ),
+        }
+    }
+
+    pub fn parse_assign_or_call_rest(&mut self) -> ParseResult<AssignOrCall> {
+        match self.lex.peek() {
+            Some(Token::TkParOpen) => todo!(),
+            Some(Token::TkAssign) => todo!(),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_expression(&mut self) -> ParseResult<ExpressionNode> {
+        // TODO: this is not done properly yet! we can't jump straight to e6!
+        self.parse_e6()
+    }
+
+    pub fn parse_e6(&mut self) -> ParseResult<ExpressionNode> {
+        match self.lex.peek() {
+            Some(Token::TkParOpen) => {
+                self.expect_token(&Token::TkParOpen)?;
+                let expr = self.parse_expression()?;
+                self.expect_token(&Token::TkParClose)?;
+                Ok(expr)
+            },
+            Some(Token::LitInt(i)) => Ok(ExpressionNode::LitInt(*i)),
+            Some(Token::Ident(_)) => todo!(),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_read_or_call(&mut self) -> ParseResult<ExpressionNode> {
+        let target = self.expect_identifier()?;
+        match self.parse_read_or_call_rest()? {
+            Some(params) => Ok(
+                ExpressionNode::Call(
+                    CallNode { callable_name: target, params: params }
+                )
+            ),
+            None => Ok(
+                ExpressionNode::Access(target)
+            ),
+        }
+    }
+
+    pub fn parse_read_or_call_rest(&mut self) -> ParseResult<Option<Vec<ExpressionNode>>> {
         todo!()
     }
 }
@@ -221,4 +296,9 @@ enum Declaration {
     Constants(Vec<StorageDeclarationNode>),
     Function(CallableDeclarationNode),
     Procedure(CallableDeclarationNode)
+}
+
+enum AssignOrCall {
+    Assign(ExpressionNode),
+    Call(Vec<ExpressionNode>),
 }
