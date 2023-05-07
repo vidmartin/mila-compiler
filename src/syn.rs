@@ -218,7 +218,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwFor) => todo!(),
             Some(Token::KwBegin) => todo!(),
             Some(Token::Ident(s)) => {
-                todo!();
+                Ok(self.parse_assign_or_call()?)
             },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
