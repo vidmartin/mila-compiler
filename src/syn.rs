@@ -245,8 +245,16 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
     pub fn parse_assign_or_call_rest(&mut self) -> ParseResult<AssignOrCall> {
         match self.lex.peek() {
-            Some(Token::TkParOpen) => todo!(),
-            Some(Token::TkAssign) => todo!(),
+            Some(Token::TkParOpen) => {
+                self.expect_token(&Token::TkParOpen)?;
+                let params = self.parse_params()?;
+                self.expect_token(&Token::TkParClose)?;
+                Ok(AssignOrCall::Call(params))
+            },
+            Some(Token::TkAssign) => {
+                self.expect_token(&Token::TkAssign)?;
+                Ok(AssignOrCall::Assign(self.parse_expression()?))
+            },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -266,7 +274,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Ok(expr)
             },
             Some(Token::LitInt(i)) => Ok(ExpressionNode::LitInt(*i)),
-            Some(Token::Ident(_)) => todo!(),
+            Some(Token::Ident(_)) => Ok(self.parse_read_or_call()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -287,7 +295,66 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_read_or_call_rest(&mut self) -> ParseResult<Option<Vec<ExpressionNode>>> {
-        todo!()
+        match self.lex.peek() {
+            Some(Token::TkParOpen) => {
+                self.expect_token(&Token::TkParOpen)?;
+                let params = self.parse_params()?;
+                self.expect_token(&Token::TkParClose)?;
+                Ok(Some(params))
+            },
+            Some(
+                Token::TkMul |
+                Token::KwDiv | 
+                Token::KwMod | 
+                Token::TkAdd | 
+                Token::TkSub | 
+                Token::TkEq | 
+                Token::TkNotEq |
+                Token::TkMore | 
+                Token::TkLess | 
+                Token::TkMoreOrEq | 
+                Token::TkLessOrEq | 
+                Token::KwAnd | 
+                Token::KwOr | 
+                Token::TkSemicolon | 
+                Token::TkComma | 
+                Token::TkParClose | 
+                Token::KwThen | 
+                Token::KwDo | 
+                Token::KwWhile
+            ) => Ok(None),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_params(&mut self) -> ParseResult<Vec<ExpressionNode>> {
+        match self.lex.peek() {
+            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(Token::KwNot | Token::TkSub | Token::TkParOpen | Token::LitInt(_) | Token::Ident(_)) => {
+                let first_param = self.parse_expression()?;
+                let mut more_params = self.parse_more_params()?;
+                more_params.insert(0, first_param);
+                Ok(more_params)
+            }
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_more_params(&mut self) -> ParseResult<Vec<ExpressionNode>> {
+        match self.lex.peek() {
+            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(Token::TkComma) => {
+                self.expect_token(&Token::TkComma)?;
+                let first_param = self.parse_expression()?;
+                let mut more_params = self.parse_more_params()?;
+                more_params.insert(0, first_param);
+                Ok(more_params)
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 }
 
