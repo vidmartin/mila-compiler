@@ -63,6 +63,9 @@ fn llvm_test() {
 fn main() {
     let mut s = String::new();
     stdin().read_to_string(&mut s).unwrap();
+    if s.chars().last().unwrap() != '\n' {
+        s.push('\n');
+    }
 
     let mut lexer = lex::Lexer::new(s.as_str().chars());
     println!("LEX OUTPUT:");
