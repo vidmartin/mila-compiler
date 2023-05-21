@@ -2,10 +2,11 @@
 use crate::ast;
 use std::fmt;
 
+/// removes trailing newline & indents text
 fn indent(mut s: String, d: usize, dash: bool) -> String {
-    s = s.replace("\n", &("\n".to_string() + &" ".repeat(d)));
+    s = s.trim_end().replace("\n", &("\n".to_string() + &" ".repeat(d)));
     if dash {
-        s.insert_str(0, &(" ".repeat(d - 3) + "-" + &" ".repeat(2)));
+        s.insert_str(0, &(" ".repeat(d - 2) + "-" + &" ".repeat(1)));
     } else {
         s.insert_str(0, &(" ".repeat(d)));
     }
@@ -29,11 +30,13 @@ impl fmt::Display for ast::ASTNode {
                     let s = format!("{}", variable);
                     writeln!(f, "{}", indent(s, 8, true))?;
                 }
+
                 writeln!(f, "{}", if program_node.declarations.callables.is_empty() { "  - callables: (empty)" } else { "  - callables:" })?;
                 for callable in program_node.declarations.callables.iter() {
                     let s = format!("{}", callable);
                     writeln!(f, "{}", indent(s, 8, true))?;
                 }
+
                 Ok(())
             },
         }
@@ -67,7 +70,7 @@ impl fmt::Display for ast::CallableDeclarationNode {
         if let Some(im) = self.implementation.as_ref() {
             writeln!(f, "  - implementation:")?;
             let s = format!("{}", im);
-            writeln!(f, "{}", indent(s, 4, true))?;
+            writeln!(f, "{}", indent(s, 8, true))?;
         } else {
             writeln!(f, "  - implementation: (none)")?;
         }
