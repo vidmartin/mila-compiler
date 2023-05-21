@@ -135,6 +135,7 @@ impl fmt::Display for ast::ExpressionNode {
             ast::ExpressionNode::Call(call) => writeln!(f, "{}", call),
             ast::ExpressionNode::Literal(lit) => writeln!(f, "literal {}", lit),
             ast::ExpressionNode::Access(access) => writeln!(f, "access store {}", access),
+            ast::ExpressionNode::BinOp { op, lhs, rhs } => writeln!(f, "binary operator"), // TODO: properly implement
         }
     }
 }

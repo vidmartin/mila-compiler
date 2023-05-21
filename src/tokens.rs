@@ -33,6 +33,8 @@ pub enum Token {
     /// the "if" keyword
     /// used as part of an if statement
     KwThen,
+    /// the "else" keyword
+    KwElse,
     /// the "to" keyword
     /// used as part of a for statement
     KwTo,
