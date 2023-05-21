@@ -484,22 +484,22 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
     pub fn parse_e3(&mut self) -> ParseResult<ExpressionNode> {
         let lhs = self.parse_e4()?;
-        let (op, rhs) = self.parse_e3r()?;
-        Ok(ExpressionNode::BinOp {
-            op: op,
-            lhs: Some(Box::new(lhs)),
-            rhs: Some(Box::new(rhs)),
-        })
+        Ok(self.parse_e3r(lhs)?)
     }
 
-    pub fn parse_e3r(&mut self) -> ParseResult<(Token, ExpressionNode)> {
+    pub fn parse_e3r(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         match self.lex.peek() {
             Some(op @ (Token::TkLess | Token::TkLessOrEq | Token::TkMore | Token::TkMoreOrEq | Token::TkEq | Token::TkNotEq)) => {
                 let op = op.clone();
 
                 self.expect_token(&op)?;
                 let rhs = self.parse_e4()?;
-                Ok((op, rhs))
+
+                Ok(ExpressionNode::BinOp {
+                    op: op,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(rhs)),
+                })
             },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -507,6 +507,15 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_e4(&mut self) -> ParseResult<ExpressionNode> {
+        let lhs = self.parse_e5()?;
+        Ok(self.parse_more_e4(lhs)?)
+    }
+
+    pub fn parse_more_e4(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
+        todo!()
+    }
+
+    pub fn parse_e5(&mut self) -> ParseResult<ExpressionNode> {
         todo!()
     }
 
