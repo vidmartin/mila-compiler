@@ -46,7 +46,12 @@ MoreNamesWithTypes2 ->
 MaybeVariables ->
 MaybeVariables -> Variables
 
-Constants -> kwConst NamesWithType MoreNamesWithTypesSemicolon ;
+Constants -> kwConst Constant ; MoreConstants
+
+MoreConstants -> Constant ; MoreConstants
+MoreConstants -> 
+
+Constant -> ident = litInt
 
 Block -> kwBegin Statements kwEnd
 
