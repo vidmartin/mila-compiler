@@ -1,4 +1,6 @@
 
+use crate::tokens::Token;
+
 pub enum ASTNode {
     Program(ProgramNode),
 }
