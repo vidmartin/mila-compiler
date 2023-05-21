@@ -3,7 +3,7 @@ use crate::ast;
 use std::fmt;
 
 /// removes trailing newline & indents text
-fn indent(mut s: String, d: usize, dash: bool) -> String {
+pub fn indent(mut s: String, d: usize, dash: bool) -> String {
     s = s.trim_end().replace("\n", &("\n".to_string() + &" ".repeat(d)));
     if dash {
         s.insert_str(0, &(" ".repeat(d - 2) + "-" + &" ".repeat(1)));
@@ -135,7 +135,24 @@ impl fmt::Display for ast::ExpressionNode {
             ast::ExpressionNode::Call(call) => writeln!(f, "{}", call),
             ast::ExpressionNode::Literal(lit) => writeln!(f, "literal {}", lit),
             ast::ExpressionNode::Access(access) => writeln!(f, "access store {}", access),
-            ast::ExpressionNode::BinOp { op, lhs, rhs } => writeln!(f, "binary operator"), // TODO: properly implement
+            ast::ExpressionNode::BinOp { op, lhs: lhsopt, rhs: rhsopt } => {
+                writeln!(f,
+                    "{}{}{}",
+                    if lhsopt.is_some() { "A " } else { "" },
+                    op,
+                    if rhsopt.is_some() { " B" } else { "" }
+                )?;
+                
+                if let Some(lhs) = lhsopt {
+                    writeln!(f, "{}", indent(format!("A: {}", lhs), 4, true))?;
+                }
+
+                if let Some(rhs) = rhsopt {
+                    writeln!(f, "{}", indent(format!("B: {}", rhs), 4, true))?;
+                }
+
+                Ok(())
+            }
         }
     }
 }

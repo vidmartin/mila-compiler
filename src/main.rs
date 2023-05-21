@@ -83,8 +83,9 @@ fn main() {
     let mut parser = syn::Parser::new(&mut lexer);
     let parse_result = parser.parse_program();
     println!("PARSE OUTPUT:");
+
     match parse_result {
-        Ok(node) => println!("{}", ast::ASTNode::Program(node)),
+        Ok(node) => println!("{}", ast_display::indent(format!("{}", ast::ASTNode::Program(node)), 4, false)),
         Err(err) => println!("{:?}", err),
     }
 
