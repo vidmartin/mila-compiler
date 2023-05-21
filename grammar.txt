@@ -91,48 +91,46 @@ Range -> litInt RangeRest
 RangeRest -> kwTo litInt
 RangeRest -> kwDownto litInt
 
-Expression -> E0 MoreE0
+Expression -> E0
 
-MoreE0 -> 
-MoreE0 -> kwOr E0 MoreE0
+E0 -> E1 MoreE0
+MoreE0 -> or E0
+MoreE0 ->
 
-E0 -> E1 MoreE1
-
+E1 -> E2 MoreE1
+MoreE1 -> and E1
 MoreE1 ->
-MoreE1 -> kwAnd E1 MoreE1
 
-E1 -> E2
-E1 -> kwNot E2
+E2 -> not E2
+E2 -> E3
 
-E2 -> E3 MoreE3
+E3 -> E4 E3Rest
+E3R -> = E4
+E3R -> <> E4
+E3R -> < E4
+E3R -> > E4
+E3R -> <= E4
+E3R -> >= E4
+E3R ->
 
-MoreE3 ->
-MoreE3 -> = E3 MoreE3
-MoreE3 -> <> E3 MoreE3
-MoreE3 -> > E3 MoreE3
-MoreE3 -> < E3 MoreE3
-MoreE3 -> >= E3 MoreE3
-MoreE3 -> <= E3 MoreE3
-
-E3 -> E4 MoreE4
-
+E4 -> E5 MoreE4
+MoreE4 -> + E4
+MoreE4 -> - E4
 MoreE4 ->
-MoreE4 -> + E4 MoreE4
-MoreE4 -> - E4 MoreE4
 
-E4 -> E5 MoreE5
-
+E5 -> E6 MoreE5
+MoreE5 -> * E5
+MoreE5 -> div E5
+MoreE5 -> mod E5
 MoreE5 ->
-MoreE5 -> * E5 MoreE5
-MoreE5 -> kwDiv E5 MoreE5
-MoreE5 -> kwMod E5 MoreE5
 
-E5 -> E6
-E5 -> - E6
+E6 -> + E6
+E6 -> - E6
+E6 -> E7
 
-E6 -> ( Expression )
-E6 -> litInt
-E6 -> ReadOrCall
+E7 -> ( E0 )
+E7 -> ReadOrCall
+E7 -> litInt
 
 ReadOrCall -> ident ReadOrCallRest
 
