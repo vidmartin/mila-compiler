@@ -15,7 +15,7 @@ pub enum ExpressionNode {
     Call(CallNode),
     Literal(LiteralNode),
     Access(String),
-    BinOp { op: Token, lhs: Option<ExpressionNode>, rhs: Option<ExpressionNode> },
+    BinOp { op: Token, lhs: Option<Box<ExpressionNode>>, rhs: Option<Box<ExpressionNode>> },
 }
 
 pub enum LiteralNode {

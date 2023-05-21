@@ -386,6 +386,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e0(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         match self.lex.peek() {
             Some(op @ Token::KwOr) => {
+                let op = op.clone();
+
                 self.expect_token(&Token::KwOr)?;
                 let rhs = self.parse_e0()?;
 
@@ -397,35 +399,39 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     // convert to left associativity
                     Ok(ExpressionNode::BinOp {
                         op: subop,
-                        lhs: Some(ExpressionNode::BinOp {
-                            op: op,
-                            lhs: Some(lhs),
-                            rhs: sublhs,
-                        }),
+                        lhs: Some(
+                            Box::new(ExpressionNode::BinOp {
+                                op: op,
+                                lhs: Some(Box::new(lhs)),
+                                rhs: sublhs,
+                            })
+                        ),
                         rhs: subrhs,
                     })
                 } else {
                     Ok(ExpressionNode::BinOp {
                         op: op,
-                        lhs: Some(lhs),
-                        rhs: Some(rhs),
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
                     })
                 }
             },
-            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::KwDo | Token::KwElse | Token::KwThen) => Some(lhs),
+            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::KwDo | Token::KwElse | Token::KwThen) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
     }
 
-    pub fn parse_e1(&mut self) -> ParseResult<()> {
+    pub fn parse_e1(&mut self) -> ParseResult<ExpressionNode> {
         let lhs = self.parse_e2()?;
-        Ok(self.parse_more_e1(lhs))
+        Ok(self.parse_more_e1(lhs)?)
     }
 
     pub fn parse_more_e1(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         match self.lex.peek() {
             Some(op @ Token::KwAnd) => {
+                let op = op.clone();
+
                 self.expect_token(&Token::KwAnd)?;
                 let rhs = self.parse_e1()?;
 
@@ -437,22 +443,24 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     // convert to left associativity
                     Ok(ExpressionNode::BinOp {
                         op: subop,
-                        lhs: Some(ExpressionNode::BinOp {
-                            op: op,
-                            lhs: Some(lhs),
-                            rhs: sublhs,
-                        }),
+                        lhs: Some(
+                            Box::new(ExpressionNode::BinOp {
+                                op: op,
+                                lhs: Some(Box::new(lhs)),
+                                rhs: sublhs,
+                            })
+                        ),
                         rhs: subrhs,
                     })
                 } else {
                     Ok(ExpressionNode::BinOp {
                         op: op,
-                        lhs: Some(lhs),
-                        rhs: Some(rhs),
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
                     })
                 }
             },
-            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::KwDo | Token::KwElse | Token::KwThen | Token::KwOr) => Some(lhs),
+            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::KwDo | Token::KwElse | Token::KwThen | Token::KwOr) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -465,7 +473,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Ok(ExpressionNode::BinOp {
                     op: Token::KwNot,
                     lhs: None,
-                    rhs: Some(self.parse_e2()?),
+                    rhs: Some(Box::new(self.parse_e2()?)),
                 })
             },
             Some(Token::TkParOpen | Token::TkAdd | Token::TkSub | Token::Ident(_) | Token::LitInt(_)) => Ok(self.parse_e3()?),
@@ -479,16 +487,19 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         let (op, rhs) = self.parse_e3r()?;
         Ok(ExpressionNode::BinOp {
             op: op,
-            lhs: Some(lhs),
-            rhs: Some(rhs),
+            lhs: Some(Box::new(lhs)),
+            rhs: Some(Box::new(rhs)),
         })
     }
 
     pub fn parse_e3r(&mut self) -> ParseResult<(Token, ExpressionNode)> {
         match self.lex.peek() {
             Some(op @ (Token::TkLess | Token::TkLessOrEq | Token::TkMore | Token::TkMoreOrEq | Token::TkEq | Token::TkNotEq)) => {
+                let op = op.clone();
+
                 self.expect_token(&op)?;
-                Ok((op, self.parse_e4()?))
+                let rhs = self.parse_e4()?;
+                Ok((op, rhs))
             },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
