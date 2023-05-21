@@ -474,8 +474,29 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         }
     }
 
-    pub fn parse_e3(&mut self) -> ParseResult<()> {
+    pub fn parse_e3(&mut self) -> ParseResult<ExpressionNode> {
+        let lhs = self.parse_e4()?;
+        let (op, rhs) = self.parse_e3r()?;
+        Ok(ExpressionNode::BinOp {
+            op: op,
+            lhs: Some(lhs),
+            rhs: Some(rhs),
+        })
+    }
 
+    pub fn parse_e3r(&mut self) -> ParseResult<(Token, ExpressionNode)> {
+        match self.lex.peek() {
+            Some(op @ (Token::TkLess | Token::TkLessOrEq | Token::TkMore | Token::TkMoreOrEq | Token::TkEq | Token::TkNotEq)) => {
+                self.expect_token(&op)?;
+                Ok((op, self.parse_e4()?))
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_e4(&mut self) -> ParseResult<ExpressionNode> {
+        todo!()
     }
 
     pub fn parse_e6(&mut self) -> ParseResult<ExpressionNode> {
