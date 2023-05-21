@@ -499,6 +499,16 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     rhs: Some(Box::new(rhs)),
                 })
             },
+            Some(
+                Token::TkParClose |
+                Token::TkComma |
+                Token::TkSemicolon |
+                Token::KwAnd |
+                Token::KwDo |
+                Token::KwElse |
+                Token::KwThen |
+                Token::KwOr
+            ) => Ok(lhs), 
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -563,23 +573,99 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_e5(&mut self) -> ParseResult<ExpressionNode> {
-        todo!()
+        let lhs = self.parse_e6()?;
+        Ok(self.parse_more_e5(lhs)?)
+    }
+
+    pub fn parse_more_e5(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
+        match self.lex.peek() {
+            Some(op @ (Token::TkMul | Token::KwDiv | Token::KwMod)) => {
+                let op = op.clone();
+                self.expect_token(&op)?;
+                let rhs = self.parse_e5()?;
+
+                if let ExpressionNode::BinOp {
+                    op: subop @ (Token::TkMul | Token::KwDiv | Token::KwMod),
+                    lhs: sublhs,
+                    rhs: subrhs,
+                } = rhs {
+                    // convert to left associativity
+                    Ok(ExpressionNode::BinOp {
+                        op: subop,
+                        lhs: Some(
+                            Box::new(ExpressionNode::BinOp {
+                                op: op,
+                                lhs: Some(Box::new(lhs)),
+                                rhs: sublhs,
+                            })
+                        ),
+                        rhs: subrhs,
+                    })
+                } else {
+                    Ok(ExpressionNode::BinOp {
+                        op: op,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                    })
+                }
+            },
+            Some(
+                Token::TkParClose |
+                Token::TkComma |
+                Token::TkSemicolon |
+                Token::TkLess |
+                Token::TkLessOrEq |
+                Token::TkMore |
+                Token::TkMoreOrEq |
+                Token::TkEq |
+                Token::TkNotEq |
+                Token::KwAnd |
+                Token::KwDo |
+                Token::KwElse |
+                Token::KwThen |
+                Token::KwOr |
+                Token::TkAdd |
+                Token::TkSub
+            ) => Ok(lhs),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 
     pub fn parse_e6(&mut self) -> ParseResult<ExpressionNode> {
         match self.lex.peek() {
-            Some(Token::TkParOpen) => {
-                self.expect_token(&Token::TkParOpen)?;
-                let expr = self.parse_expression()?;
-                self.expect_token(&Token::TkParClose)?;
-                Ok(expr)
+            Some(op @ (Token::TkAdd | Token::TkSub)) => {
+                let op = op.clone();
+                self.expect_token(&op)?;
+                Ok(ExpressionNode::BinOp {
+                    op: op,
+                    lhs: None,
+                    rhs: Some(Box::new(self.parse_e6()?)),
+                })
             },
-            Some(Token::LitInt(i)) => Ok(ExpressionNode::Literal(LiteralNode::Integer(*i))),
-            Some(Token::Ident(_)) => Ok(self.parse_read_or_call()?),
+            Some(Token::TkParOpen | Token::Ident(_) | Token::LitInt(_)) => Ok(self.parse_e7()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
-    }    
+    }
+
+    pub fn parse_e7(&mut self) -> ParseResult<ExpressionNode> {
+        match self.lex.peek() {
+            Some(Token::TkParOpen) => {
+                self.expect_token(&Token::TkParOpen)?;
+                let expr = self.parse_e0()?;
+                self.expect_token(&Token::TkParClose)?;
+                Ok(expr)
+            },
+            Some(Token::Ident(_)) => Ok(self.parse_read_or_call()?),
+            Some(Token::LitInt(_)) => {
+                let int = self.expect_int_lit()?;
+                Ok(ExpressionNode::Literal(LiteralNode::Integer(int)))
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
 }
 
 enum Declaration {
