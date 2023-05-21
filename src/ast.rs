@@ -11,8 +11,12 @@ pub enum StatementNode {
 
 pub enum ExpressionNode {
     Call(CallNode),
-    LitInt(i64),
+    Literal(LiteralNode),
     Access(String),
+}
+
+pub enum LiteralNode {
+    Integer(i64),
 }
 
 /// top level node for the entire program
@@ -31,6 +35,7 @@ pub struct ProgramDeclarations {
 pub struct StorageDeclarationNode {
     pub name: String,
     pub dtype: String,
+    pub init: Option<LiteralNode>,
 }
 
 /// declaration of a function or a procedure

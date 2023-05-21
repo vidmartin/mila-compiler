@@ -45,7 +45,11 @@ impl fmt::Display for ast::ASTNode {
 
 impl fmt::Display for ast::StorageDeclarationNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{} : {}", self.name, self.dtype)
+        if let Some(init) = self.init.as_ref() {
+            writeln!(f, "{} : {} = {}", self.name, self.dtype, init)
+        } else {
+            writeln!(f, "{} : {}", self.name, self.dtype)
+        }
     }
 }
 
@@ -129,8 +133,16 @@ impl fmt::Display for ast::ExpressionNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ast::ExpressionNode::Call(call) => writeln!(f, "{}", call),
-            ast::ExpressionNode::LitInt(litint) => writeln!(f, "integer literal {}", *litint),
+            ast::ExpressionNode::Literal(lit) => writeln!(f, "literal {}", lit),
             ast::ExpressionNode::Access(access) => writeln!(f, "access store {}", access),
+        }
+    }
+}
+
+impl fmt::Display for ast::LiteralNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ast::LiteralNode::Integer(integer) => writeln!(f, "integer({})", integer),
         }
     }
 }

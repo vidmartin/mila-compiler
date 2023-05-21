@@ -111,7 +111,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.lex.peek() {
             Some(Token::KwFunction) => todo!(),
             Some(Token::KwProcedure) => todo!(),
-            Some(Token::KwConst) => todo!(),
+            Some(Token::KwConst) => Ok(Declaration::Constants(self.parse_constants()?)),
             Some(Token::KwVar) => Ok(Declaration::Variables(self.parse_variables()?)),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -130,6 +130,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 |(name, typename)| StorageDeclarationNode {
                     dtype: typename,
                     name: name,
+                    init: None,
                 }
             ).collect()
         )
@@ -273,7 +274,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::TkParClose)?;
                 Ok(expr)
             },
-            Some(Token::LitInt(i)) => Ok(ExpressionNode::LitInt(*i)),
+            Some(Token::LitInt(i)) => Ok(ExpressionNode::Literal(LiteralNode::Integer(*i))),
             Some(Token::Ident(_)) => Ok(self.parse_read_or_call()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -355,6 +356,41 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
+    }
+
+    pub fn parse_constants(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
+        self.expect_token(&Token::KwConst)?;
+        let first_constant = self.parse_constant()?;
+        self.expect_token(&Token::TkSemicolon)?;
+        let mut more_constants = self.parse_more_constants()?;
+        more_constants.insert(0, first_constant);
+        Ok(more_constants)
+    }
+
+    pub fn parse_more_constants(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
+        match self.lex.peek() {
+            Some(Token::Ident(s)) => {
+                let first_constant = self.parse_constant()?;
+                self.expect_token(&Token::TkSemicolon)?;
+                let mut constants = self.parse_more_constants()?;
+                constants.insert(0, first_constant);
+                Ok(constants)
+            },
+            Some(Token::KwBegin | Token::KwConst | Token::KwFunction | Token::KwProcedure | Token::KwVar) => Ok(Vec::new()),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_constant(&mut self) -> ParseResult<StorageDeclarationNode> {
+        let ident = self.expect_identifier()?;
+        self.expect_token(&Token::TkEq)?;
+        let val = self.expect_int_lit()?;
+        Ok(StorageDeclarationNode {
+            dtype: "integer".to_string(), // TODO: have "integer" as a constant somewhere
+            name: ident,
+            init: Some(LiteralNode::Integer(val)),
+        })
     }
 }
 
