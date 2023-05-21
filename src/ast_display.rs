@@ -17,17 +17,19 @@ impl fmt::Display for ast::ASTNode {
         match self {
             ast::ASTNode::Program(program_node) => {
                 writeln!(f, "ASTNode::Program {}", program_node.name)?;
-                writeln!(f, "  - constants:")?;
+                
+                writeln!(f, "{}", if program_node.declarations.constants.is_empty() { "  - constants: (empty)" } else { "  - constants:" })?;
                 for constant in program_node.declarations.constants.iter() {
                     let s = format!("{}", constant);
                     writeln!(f, "{}", indent(s, 8, true))?;
                 }
-                writeln!(f, "  - variables:")?;
+
+                writeln!(f, "{}", if program_node.declarations.variables.is_empty() { "  - variables: (empty)" } else { "  - variables:" })?;
                 for variable in program_node.declarations.variables.iter() {
                     let s = format!("{}", variable);
                     writeln!(f, "{}", indent(s, 8, true))?;
                 }
-                writeln!(f, "  - callables:")?;
+                writeln!(f, "{}", if program_node.declarations.callables.is_empty() { "  - callables: (empty)" } else { "  - callables:" })?;
                 for callable in program_node.declarations.callables.iter() {
                     let s = format!("{}", callable);
                     writeln!(f, "{}", indent(s, 8, true))?;
