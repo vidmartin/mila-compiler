@@ -104,7 +104,7 @@ MoreE1 ->
 E2 -> not E2
 E2 -> E3
 
-E3 -> E4 E3Rest
+E3 -> E4 E3R
 E3R -> = E4
 E3R -> <> E4
 E3R -> < E4
