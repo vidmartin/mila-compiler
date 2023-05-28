@@ -62,27 +62,22 @@ Statement -> If
 Statement -> While
 Statement -> For
 Statement -> Block
-Statement -> Expression
-
-AssignOrCall -> ident AssignOrCallRest
-
-AssignOrCallRest -> ( Params )
-AssignOrCallRest -> := Expression
+Statement -> ExpressionOrAssignment
 
 Params ->
-Params -> Expression MoreParams
+Params -> E0 MoreParams
 
 MoreParams ->
-MoreParams -> , Expression MoreParams
+MoreParams -> , E0 MoreParams
 
-If -> kwIf Expression kwThen Statement MaybeElse
+If -> kwIf E0 kwThen Statement MaybeElse
 
 MaybeElse ->
 MaybeElse -> Else
 
 Else -> kwElse Statement
 
-While -> kwWhile Expression kwDo Statement
+While -> kwWhile E0 kwDo Statement
 
 For -> kwFor ident := Range kwDo Statement
 
@@ -91,7 +86,10 @@ Range -> litInt RangeRest
 RangeRest -> kwTo litInt
 RangeRest -> kwDownto litInt
 
-Expression -> E0
+ExpressionOrAssignment -> E0 ExpressionOrAssignmentRest
+
+ExpressionOrAssignmentRest -> := E0
+ExpressionOrAssignmentRest -> 
 
 E0 -> E1 MoreE0
 MoreE0 -> or E0
