@@ -55,8 +55,11 @@ Constant -> ident = litInt
 
 Block -> kwBegin Statements kwEnd
 
-Statements ->
-Statements -> Statement ; Statements
+Statements -> 
+Statements -> Statement MoreStatements
+
+MoreStatements -> 
+MoreStatements -> ; Statement MoreStatements
 
 Statement -> If
 Statement -> While
