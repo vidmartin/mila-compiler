@@ -46,7 +46,18 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             },
             None => Err(SyntaxError::UnexpectedEnd),
         }
-    }   
+    }
+
+    fn expect_token_maybe(&mut self, token: &Token) -> ParseResult<bool> {
+        if let Some(tok) = self.lex.peek() {
+            if *tok == *token {
+                self.expect_token(token)?;
+                return Ok(true);
+            }
+        }
+        
+        return Ok(false);
+    }
 
     fn expect_identifier(&mut self) -> ParseResult<String> {
         match self.lex.next() {
@@ -198,16 +209,18 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwArray) => {
                 self.expect_token(&Token::KwArray)?;
                 self.expect_token(&Token::TkSqOpen)?;
+                let minus_from = self.expect_token_maybe(&Token::TkSub)?; // hack: allow negative literal for this particular case (because of arrayTest.mila)
                 let from = self.expect_int_lit()?;
                 self.expect_token(&Token::TkDotDot)?;
+                let minus_to = self.expect_token_maybe(&Token::TkSub)?; // hack: allow negative literal for this particular case (because of arrayTest.mila)
                 let to = self.expect_int_lit()?;
                 self.expect_token(&Token::TkSqClose)?;
                 self.expect_token(&Token::KwOf)?;
                 let item = self.parse_type()?;
 
                 Ok(DataType::Array {
-                    from: from,
-                    to: to,
+                    from: if minus_from { -from } else { from },
+                    to: if minus_to { -to } else { to },
                     item: Box::new(item),
                 })
             },
