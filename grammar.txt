@@ -59,7 +59,7 @@ Statements ->
 Statements -> Statement MoreStatements
 
 MoreStatements -> 
-MoreStatements -> ; Statement MoreStatements
+MoreStatements -> ; Statements
 
 Statement -> If
 Statement -> While
