@@ -283,7 +283,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("Statement");
 
         match self.lex.peek() {
-            Some(Token::KwIf) => todo!(),
+            Some(Token::KwIf) => Ok(StatementNode::IfStatement(self.parse_if()?)),
             Some(Token::KwWhile) => todo!(),
             Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
             Some(Token::KwBegin) => Ok(StatementNode::StatementBlock(self.parse_block()?)),
@@ -932,6 +932,38 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             rhs: Some(Box::new(rhs)),
             op: op,
         })
+    }
+
+    pub fn parse_if(&mut self) -> ParseResult<IfStatementNode> {
+        self.debug_print("If");
+
+        self.expect_token(&Token::KwIf)?;
+        let cond = self.parse_e0()?;
+        self.expect_token(&Token::KwThen)?;
+        let stmt = self.parse_statement()?;
+        let elbl = self.parse_maybe_else()?;
+
+        Ok(IfStatementNode {
+            condition: cond,
+            yes: Box::new(stmt),
+            no: elbl.map(Box::new),
+        })
+    }
+
+    pub fn parse_maybe_else(&mut self) -> ParseResult<Option<StatementNode>> {
+        match self.lex.peek() {
+            Some(Token::TkSemicolon) => Ok(None),
+            Some(Token::KwElse) => Ok(Some(self.parse_else()?)), // hack for first-follow conflict
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_else(&mut self) -> ParseResult<StatementNode> {
+        self.debug_print("Else");
+
+        self.expect_token(&Token::KwElse)?;
+        Ok(self.parse_statement()?)
     }
 }
 
