@@ -34,12 +34,13 @@ pub struct ProgramDeclarations {
     pub callables: Vec<CallableDeclarationNode>,
 }
 
+#[derive(Clone)]
 pub enum DataType {
     One(String),
     Array {
         item: Box<DataType>,
-        from: isize,
-        to: isize,
+        from: i64,
+        to: i64,
     }
 }
 

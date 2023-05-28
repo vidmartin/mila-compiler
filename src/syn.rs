@@ -144,8 +144,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         Ok(
             names_with_type.into_iter().map(
-                |(name, typename)| StorageDeclarationNode {
-                    dtype: DataType::One(typename),
+                |(name, dtype)| StorageDeclarationNode {
+                    dtype: dtype,
                     name: name,
                     init: None,
                 }
@@ -153,14 +153,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         )
     }
 
-    pub fn parse_names_with_type(&mut self) -> ParseResult<Vec<(String, String)>> {
+    pub fn parse_names_with_type(&mut self) -> ParseResult<Vec<(String, DataType)>> {
         self.debug_print("NamesWithType");
 
         let names = self.parse_names()?;
         self.expect_token(&Token::TkColon)?;
-        let typename = self.parse_type()?;
+        let dtype = self.parse_type()?;
 
-        Ok(names.into_iter().map(|name| (name, typename.clone())).collect())
+        Ok(names.into_iter().map(|name| (name, dtype.clone())).collect())
     }
 
     pub fn parse_names(&mut self) -> ParseResult<Vec<String>> {
@@ -190,16 +190,33 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         }
     }
 
-    pub fn parse_type(&mut self) -> ParseResult<String> {
+    pub fn parse_type(&mut self) -> ParseResult<DataType> {
         self.debug_print("Type");
 
-        let typename = self.expect_identifier()?;
-        return Ok(typename);
+        match self.lex.peek() {
+            Some(Token::Ident(_)) => Ok(DataType::One(self.expect_identifier()?)),
+            Some(Token::KwArray) => {
+                self.expect_token(&Token::KwArray)?;
+                self.expect_token(&Token::TkSqOpen)?;
+                let from = self.expect_int_lit()?;
+                self.expect_token(&Token::TkDotDot)?;
+                let to = self.expect_int_lit()?;
+                self.expect_token(&Token::TkSqClose)?;
+                self.expect_token(&Token::KwOf)?;
+                let item = self.parse_type()?;
 
-        // TODO: ARRAYS!
+                Ok(DataType::Array {
+                    from: from,
+                    to: to,
+                    item: Box::new(item),
+                })
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 
-    pub fn parse_more_names_with_types_2(&mut self) -> ParseResult<Vec<(String, String)>> {
+    pub fn parse_more_names_with_types_2(&mut self) -> ParseResult<Vec<(String, DataType)>> {
         self.debug_print("MoreNamesWithTypes2");
 
         match self.lex.peek() {
