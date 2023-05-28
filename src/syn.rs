@@ -370,6 +370,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkLess | 
                 Token::TkMoreOrEq | 
                 Token::TkLessOrEq | 
+                Token::TkSqOpen |
+                Token::TkSqClose |
                 Token::KwAnd | 
                 Token::KwOr | 
                 Token::TkSemicolon | 
@@ -466,15 +468,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         match self.parse_expression_or_assigment_rest()? {
             Some(rhs) => {
-                if let ExpressionNode::Access(varname) = lhs {
-                    Ok(StatementNode::Assignment(AssignmentNode {
-                        varname: varname,
-                        value: rhs,
-                    }))
-                } else {
-                    // can only assign to the expression of type "Access"
-                    Err(SyntaxError::InvalidAssignment)
-                }
+                Ok(StatementNode::Assignment(AssignmentNode {
+                    target: lhs,
+                    value: rhs,
+                }))
             },
             None => Ok(StatementNode::Expression(lhs)),
         }
@@ -535,7 +532,16 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     })
                 }
             },
-            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::TkAssign | Token::KwDo | Token::KwElse | Token::KwThen) => Ok(lhs),
+            Some(
+                Token::TkParClose |
+                Token::TkSqClose |
+                Token::TkComma |
+                Token::TkSemicolon |
+                Token::TkAssign |
+                Token::KwDo |
+                Token::KwElse |
+                Token::KwThen
+            ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -582,7 +588,17 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     })
                 }
             },
-            Some(Token::TkParClose | Token::TkComma | Token::TkSemicolon | Token::TkAssign | Token::KwDo | Token::KwElse | Token::KwThen | Token::KwOr) => Ok(lhs),
+            Some(
+                Token::TkParClose |
+                Token::TkSqClose |
+                Token::TkComma |
+                Token::TkSemicolon |
+                Token::TkAssign |
+                Token::KwDo |
+                Token::KwElse |
+                Token::KwThen |
+                Token::KwOr
+            ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -631,6 +647,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             },
             Some(
                 Token::TkParClose |
+                Token::TkSqClose |
                 Token::TkComma |
                 Token::TkSemicolon |
                 Token::TkAssign |
@@ -688,6 +705,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             },
             Some(
                 Token::TkParClose |
+                Token::TkSqClose |
                 Token::TkComma |
                 Token::TkSemicolon |
                 Token::TkAssign |
@@ -751,6 +769,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             },
             Some(
                 Token::TkParClose |
+                Token::TkSqClose |
                 Token::TkComma |
                 Token::TkSemicolon |
                 Token::TkAssign |
@@ -795,18 +814,61 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_e7(&mut self) -> ParseResult<ExpressionNode> {
         self.debug_print("E7");
 
-        match self.lex.peek() {
+        let expr = match self.lex.peek() {
             Some(Token::TkParOpen) => {
                 self.expect_token(&Token::TkParOpen)?;
                 let expr = self.parse_e0()?;
                 self.expect_token(&Token::TkParClose)?;
-                Ok(expr)
+                expr
             },
-            Some(Token::Ident(_)) => Ok(self.parse_read_or_call()?),
+            Some(Token::Ident(_)) => self.parse_read_or_call()?,
             Some(Token::LitInt(_)) => {
                 let int = self.expect_int_lit()?;
-                Ok(ExpressionNode::Literal(LiteralNode::Integer(int)))
+                ExpressionNode::Literal(LiteralNode::Integer(int))
             },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()))?,
+            None => Err(SyntaxError::UnexpectedEnd)?,
+        };
+
+        Ok(self.parse_more_e7(expr)?)
+    }
+
+    pub fn parse_more_e7(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
+        self.debug_print("MoreE7");
+
+        match self.lex.peek() {
+            Some(Token::TkSqOpen) => {
+                self.expect_token(&Token::TkSqOpen)?;
+                let expr = self.parse_e0()?;
+                self.expect_token(&Token::TkSqClose)?;
+                Ok(self.parse_more_e7(ExpressionNode::ArrayAccess {
+                    array: Box::new(lhs),
+                    index: Box::new(expr),
+                })?)
+            },
+            Some(
+                Token::TkParClose |
+                Token::TkSqClose |
+                Token::TkMul |
+                Token::TkAdd |
+                Token::TkComma |
+                Token::TkSub |
+                Token::TkAssign |
+                Token::TkSemicolon |
+                Token::TkLess |
+                Token::TkLessOrEq |
+                Token::TkNotEq |
+                Token::TkEq |
+                Token::TkMore |
+                Token::TkMoreOrEq |
+                Token::KwAnd |
+                Token::KwDiv |
+                Token::KwDo |
+                Token::KwElse |
+                Token::KwThen |
+                Token::KwMod |
+                Token::KwOr
+            ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }

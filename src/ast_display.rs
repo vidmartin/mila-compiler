@@ -170,7 +170,9 @@ impl fmt::Display for ast::StatementNode {
 impl fmt::Display for ast::AssignmentNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "AssignmentNode:")?;
-        writeln!(f, "  - varname: {}", self.varname)?;
+        writeln!(f, "  - target:")?;
+        let s = format!("{}", self.target);
+        writeln!(f, "{}", indent(s, 8, true))?;
         writeln!(f, "  - value:")?;
         let s = format!("{}", self.value);
         writeln!(f, "{}", indent(s, 8, true))?;
@@ -184,6 +186,12 @@ impl fmt::Display for ast::ExpressionNode {
             ast::ExpressionNode::Call(call) => writeln!(f, "{}", call),
             ast::ExpressionNode::Literal(lit) => writeln!(f, "literal {}", lit),
             ast::ExpressionNode::Access(access) => writeln!(f, "access store {}", access),
+            ast::ExpressionNode::ArrayAccess { array, index } => {
+                writeln!(f, "A [ B ]")?;
+                writeln!(f, "{}", indent(format!("A: {}", array), 4, true))?;
+                writeln!(f, "{}", indent(format!("B: {}", index), 4, true))?;
+                Ok(())
+            },
             ast::ExpressionNode::BinOp { op, lhs: lhsopt, rhs: rhsopt } => {
                 writeln!(f,
                     "{}{}{}",

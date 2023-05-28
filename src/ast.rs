@@ -40,6 +40,7 @@ pub enum ExpressionNode {
     Call(CallNode),
     Literal(LiteralNode),
     Access(String),
+    ArrayAccess { array: Box<ExpressionNode>, index: Box<ExpressionNode> },
     BinOp { op: Token, lhs: Option<Box<ExpressionNode>>, rhs: Option<Box<ExpressionNode>> },
 }
 
@@ -90,7 +91,7 @@ pub struct StatementBlockNode {
 }
 
 pub struct AssignmentNode {
-    pub varname: String,
+    pub target: ExpressionNode,
     pub value: ExpressionNode,
 }
 
