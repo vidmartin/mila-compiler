@@ -126,9 +126,12 @@ E6 -> + E6
 E6 -> - E6
 E6 -> E7
 
-E7 -> ( E0 )
-E7 -> ReadOrCall
-E7 -> litInt
+E7 -> ( E0 ) MoreE7
+E7 -> ReadOrCall MoreE7
+E7 -> litInt MoreE7
+
+MoreE7 -> [ E0 ] MoreE7
+MoreE7 -> 
 
 ReadOrCall -> ident ReadOrCallRest
 
