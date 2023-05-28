@@ -62,7 +62,7 @@ Statement -> If
 Statement -> While
 Statement -> For
 Statement -> Block
-Statement -> AssignOrCall
+Statement -> Expression
 
 AssignOrCall -> ident AssignOrCallRest
 
