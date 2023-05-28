@@ -321,7 +321,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         match self.lex.peek() {
             Some(Token::KwIf) => Ok(StatementNode::IfStatement(self.parse_if()?)),
-            Some(Token::KwWhile) => todo!(),
+            Some(Token::KwWhile) => Ok(StatementNode::WhileLoop(self.parse_while()?)),
             Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
             Some(Token::KwBegin) => Ok(StatementNode::StatementBlock(self.parse_block()?)),
             Some(Token::Ident(_)) => Ok(self.parse_expression_or_assignment()?),
@@ -995,6 +995,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_maybe_else(&mut self) -> ParseResult<Option<StatementNode>> {
+        self.debug_print("MaybeElse");
+
         match self.lex.peek() {
             Some(Token::TkSemicolon | Token::KwEnd) => Ok(None),
             Some(Token::KwElse) => Ok(Some(self.parse_else()?)), // hack for first-follow conflict
@@ -1008,6 +1010,20 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         self.expect_token(&Token::KwElse)?;
         Ok(self.parse_statement()?)
+    }
+
+    pub fn parse_while(&mut self) -> ParseResult<WhileLoopNode> {
+        self.debug_print("While");
+
+        self.expect_token(&Token::KwWhile)?;
+        let cond = self.parse_e0()?;
+        self.expect_token(&Token::KwDo)?;
+        let stmt = self.parse_statement()?;
+
+        Ok(WhileLoopNode {
+            condition: cond,
+            inner: Box::new(stmt),
+        })
     }
 }
 
