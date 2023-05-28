@@ -9,6 +9,31 @@ pub enum StatementNode {
     StatementBlock(StatementBlockNode),
     Assignment(AssignmentNode),
     Expression(ExpressionNode),
+    ForLoop(ForLoopNode),
+    WhileLoop(WhileLoopNode),
+    IfStatement(IfStatementNode)
+}
+
+pub struct IfStatementNode {
+    pub condition: ExpressionNode,
+    pub yes: Box<StatementNode>,
+    pub no: Option<Box<StatementNode>>,
+}
+
+pub struct ForLoopNode {
+    pub iterating: StorageDeclarationNode,
+    pub range: Range,
+    pub inner: Box<StatementNode>,
+}
+
+pub enum Range {
+    UpTo(i64, i64),
+    DownTo(i64, i64),
+}
+
+pub struct WhileLoopNode {
+    pub condition: ExpressionNode,
+    pub inner: Box<StatementNode>,
 }
 
 pub enum ExpressionNode {

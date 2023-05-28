@@ -121,6 +121,46 @@ impl fmt::Display for ast::StatementNode {
             ast::StatementNode::Expression(expr) => {
                 writeln!(f, "{}", expr)?;
             },
+            ast::StatementNode::IfStatement(ifstmt) => {
+                writeln!(f, "if")?;
+                writeln!(f, "  - condition: ")?;
+                let s = format!("{}", ifstmt.condition);
+                writeln!(f, "{}", indent(s, 8, true))?;
+                writeln!(f, "  - yes: ")?;
+                let s = format!("{}", *ifstmt.yes);
+                writeln!(f, "{}", indent(s, 8, true))?;
+                if let Some(no) = &ifstmt.no {
+                    let s = format!("{}", *no);
+                    writeln!(f, "  - no: ")?;
+                    writeln!(f, "{}", indent(s, 8, true))?;
+                } else {
+                    writeln!(f, "  - no: (empty)")?;
+                }
+            },
+            ast::StatementNode::ForLoop(forloop) => {
+                let (from, op, to) = match forloop.range {
+                    ast::Range::UpTo(a, b) => (a, "to", b),
+                    ast::Range::DownTo(a, b) => (a, "downto", b),
+                };
+                writeln!(
+                    f,
+                    "for {} := {} {} {}",
+                    forloop.iterating.name,
+                    from, op, to,
+                )?;
+                writeln!(f, "  - inner:")?;
+                let s = format!("{}", *forloop.inner);
+                writeln!(f, "{}", indent(s, 8, true))?;
+            },
+            ast::StatementNode::WhileLoop(wloop) => {
+                writeln!(f, "while")?;
+                writeln!(f, "  - condition: ")?;
+                let s = format!("{}", wloop.condition);
+                writeln!(f, "{}", indent(s, 8, true))?;
+                writeln!(f, "  - inner: ")?;
+                let s = format!("{}", wloop.inner);
+                writeln!(f, "{}", indent(s, 8, true))?;
+            }
         }
 
         Ok(())
