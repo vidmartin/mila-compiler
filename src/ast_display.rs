@@ -53,6 +53,15 @@ impl fmt::Display for ast::StorageDeclarationNode {
     }
 }
 
+impl fmt::Display for ast::DataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ast::DataType::One(typename) => write!(f, "{}", typename),
+            ast::DataType::Array { item, from, to } => write!(f, "array [{} .. {}] of {}", from, to, item),
+        }
+    }
+}
+
 impl fmt::Display for ast::CallableDeclarationNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(s) = self.return_type.as_ref() {

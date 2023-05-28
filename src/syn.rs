@@ -145,7 +145,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(
             names_with_type.into_iter().map(
                 |(name, typename)| StorageDeclarationNode {
-                    dtype: typename,
+                    dtype: DataType::One(typename),
                     name: name,
                     init: None,
                 }
@@ -419,7 +419,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.expect_token(&Token::TkEq)?;
         let val = self.expect_int_lit()?;
         Ok(StorageDeclarationNode {
-            dtype: "integer".to_string(), // TODO: have "integer" as a constant somewhere
+            dtype: DataType::One("integer".to_string()), // TODO: have "integer" as a constant somewhere
             name: ident,
             init: Some(LiteralNode::Integer(val)),
         })

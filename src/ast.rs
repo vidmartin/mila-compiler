@@ -34,10 +34,19 @@ pub struct ProgramDeclarations {
     pub callables: Vec<CallableDeclarationNode>,
 }
 
+pub enum DataType {
+    One(String),
+    Array {
+        item: Box<DataType>,
+        from: isize,
+        to: isize,
+    }
+}
+
 /// declaration of a variable or a constant
 pub struct StorageDeclarationNode {
     pub name: String,
-    pub dtype: String,
+    pub dtype: DataType,
     pub init: Option<LiteralNode>,
 }
 
