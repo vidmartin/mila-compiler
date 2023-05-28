@@ -262,18 +262,55 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(StatementBlockNode { statements: statements })
     }
 
-    pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
-        self.debug_print("Statements");
+    // pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
+    //     self.debug_print("Statements");
 
+    //     match self.lex.peek() {
+    //         Some(Token::KwEnd) => Ok(Vec::new()),
+    //         Some(Token::KwBegin | Token::KwIf | Token::KwWhile | Token::KwFor | Token::Ident(_)) => {
+    //             let first_statement = self.parse_statement()?;
+    //             self.expect_token(&Token::TkSemicolon)?;
+    //             let mut more_statements = self.parse_statements()?;
+    //             more_statements.insert(0, first_statement);
+    //             Ok(more_statements)
+    //         }
+    //         Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+    //         None => Err(SyntaxError::UnexpectedEnd),
+    //     }
+    // }
+
+    pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
         match self.lex.peek() {
             Some(Token::KwEnd) => Ok(Vec::new()),
-            Some(Token::KwBegin | Token::KwIf | Token::KwWhile | Token::KwFor | Token::Ident(_)) => {
-                let first_statement = self.parse_statement()?;
+            Some(
+                Token::TkParOpen |
+                Token::TkComma |
+                Token::TkDot |
+                Token::Ident(_) |
+                Token::KwBegin |
+                Token::KwFor |
+                Token::KwIf |
+                Token::KwWhile |
+                Token::LitInt(_) |
+                Token::KwNot
+            ) => {
+                let first_stmt = self.parse_statement()?;
+                let mut more_stmts = self.parse_more_statements()?;
+                more_stmts.insert(0, first_stmt);
+                Ok(more_stmts)
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_more_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
+        match self.lex.peek() {
+            Some(Token::KwEnd) => Ok(Vec::new()),
+            Some(Token::TkSemicolon) => {
                 self.expect_token(&Token::TkSemicolon)?;
-                let mut more_statements = self.parse_statements()?;
-                more_statements.insert(0, first_statement);
-                Ok(more_statements)
-            }
+                Ok(self.parse_statements()?)
+            },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -382,7 +419,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDo | 
                 Token::KwWhile |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(None),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -487,7 +525,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::TkAssign)?;
                 Ok(Some(self.parse_e0()?))
             },
-            Some(Token::TkSemicolon | Token::KwElse) => Ok(None),
+            Some(Token::TkSemicolon | Token::KwElse | Token::KwEnd) => Ok(None),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -544,7 +582,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwElse |
                 Token::KwThen |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -603,7 +642,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwThen |
                 Token::KwOr |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -663,7 +703,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwThen |
                 Token::KwOr |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs), 
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -729,7 +770,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwThen |
                 Token::KwOr |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -797,7 +839,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkAdd |
                 Token::TkSub |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -881,7 +924,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwMod |
                 Token::KwOr |
                 Token::KwTo |
-                Token::KwDownto
+                Token::KwDownto |
+                Token::KwEnd
             ) => Ok(lhs),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -952,7 +996,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
     pub fn parse_maybe_else(&mut self) -> ParseResult<Option<StatementNode>> {
         match self.lex.peek() {
-            Some(Token::TkSemicolon) => Ok(None),
+            Some(Token::TkSemicolon | Token::KwEnd) => Ok(None),
             Some(Token::KwElse) => Ok(Some(self.parse_else()?)), // hack for first-follow conflict
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
