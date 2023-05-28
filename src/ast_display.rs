@@ -138,16 +138,14 @@ impl fmt::Display for ast::StatementNode {
                 }
             },
             ast::StatementNode::ForLoop(forloop) => {
-                let (from, op, to) = match forloop.range {
-                    ast::Range::UpTo(a, b) => (a, "to", b),
-                    ast::Range::DownTo(a, b) => (a, "downto", b),
-                };
                 writeln!(
                     f,
-                    "for {} := {} {} {}",
+                    "for {}",
                     forloop.iterating.name,
-                    from, op, to,
                 )?;
+                writeln!(f, "  - range:")?;
+                let s = format!("{}", forloop.range);
+                writeln!(f, "{}", indent(s, 8, true))?;
                 writeln!(f, "  - inner:")?;
                 let s = format!("{}", *forloop.inner);
                 writeln!(f, "{}", indent(s, 8, true))?;
@@ -192,25 +190,32 @@ impl fmt::Display for ast::ExpressionNode {
                 writeln!(f, "{}", indent(format!("B: {}", index), 4, true))?;
                 Ok(())
             },
-            ast::ExpressionNode::BinOp { op, lhs: lhsopt, rhs: rhsopt } => {
-                writeln!(f,
-                    "{}{}{}",
-                    if lhsopt.is_some() { "A " } else { "" },
-                    op,
-                    if rhsopt.is_some() { " B" } else { "" }
-                )?;
-                
-                if let Some(lhs) = lhsopt {
-                    writeln!(f, "{}", indent(format!("A: {}", lhs), 4, true))?;
-                }
-
-                if let Some(rhs) = rhsopt {
-                    writeln!(f, "{}", indent(format!("B: {}", rhs), 4, true))?;
-                }
-
+            ast::ExpressionNode::BinOp(binop) => {
+                writeln!(f, "{}", binop)?;
                 Ok(())
             }
         }
+    }
+}
+
+impl fmt::Display for ast::BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f,
+            "{}{}{}",
+            if self.lhs.is_some() { "A " } else { "" },
+            self.op,
+            if self.rhs.is_some() { " B" } else { "" }
+        )?;
+        
+        if let Some(lhs) = &self.lhs {
+            writeln!(f, "{}", indent(format!("A: {}", lhs), 4, true))?;
+        }
+
+        if let Some(rhs) = &self.rhs {
+            writeln!(f, "{}", indent(format!("B: {}", rhs), 4, true))?;
+        }
+
+        Ok(())
     }
 }
 

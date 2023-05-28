@@ -22,13 +22,8 @@ pub struct IfStatementNode {
 
 pub struct ForLoopNode {
     pub iterating: StorageDeclarationNode,
-    pub range: Range,
+    pub range: BinaryOperator,
     pub inner: Box<StatementNode>,
-}
-
-pub enum Range {
-    UpTo(i64, i64),
-    DownTo(i64, i64),
 }
 
 pub struct WhileLoopNode {
@@ -41,7 +36,13 @@ pub enum ExpressionNode {
     Literal(LiteralNode),
     Access(String),
     ArrayAccess { array: Box<ExpressionNode>, index: Box<ExpressionNode> },
-    BinOp { op: Token, lhs: Option<Box<ExpressionNode>>, rhs: Option<Box<ExpressionNode>> },
+    BinOp(BinaryOperator),
+}
+
+pub struct BinaryOperator {
+    pub op: Token,
+    pub lhs: Option<Box<ExpressionNode>>,
+    pub rhs: Option<Box<ExpressionNode>>,
 }
 
 pub enum LiteralNode {
