@@ -25,11 +25,11 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn debug_print(&mut self, s: &str) {
-        // if let Some(tok) = self.lex.peek() {
-        //     println!("{}, {}", s, tok);
-        // } else {
-        //     println!("{}, end of file", s);
-        // }
+        if let Some(tok) = self.lex.peek() {
+            println!("{}, {}", s, tok);
+        } else {
+            println!("{}, end of file", s);
+        }
     }
 
     fn expect_token(&mut self, token: &Token) -> ParseResult<()> {
@@ -76,6 +76,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 gotten: tok,
             }),
             None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    fn expect_int_lit_signed(&mut self) -> ParseResult<i64> {
+        if self.expect_token_maybe(&Token::TkSub)? {
+            Ok(-(self.expect_int_lit()?))
+        } else {
+            Ok(self.expect_int_lit()?)
         }
     }
 
@@ -209,18 +217,16 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwArray) => {
                 self.expect_token(&Token::KwArray)?;
                 self.expect_token(&Token::TkSqOpen)?;
-                let minus_from = self.expect_token_maybe(&Token::TkSub)?; // hack: allow negative literal for this particular case (because of arrayTest.mila)
-                let from = self.expect_int_lit()?;
+                let from = self.expect_int_lit_signed()?;
                 self.expect_token(&Token::TkDotDot)?;
-                let minus_to = self.expect_token_maybe(&Token::TkSub)?; // hack: allow negative literal for this particular case (because of arrayTest.mila)
-                let to = self.expect_int_lit()?;
+                let to = self.expect_int_lit_signed()?;
                 self.expect_token(&Token::TkSqClose)?;
                 self.expect_token(&Token::KwOf)?;
                 let item = self.parse_type()?;
 
                 Ok(DataType::Array {
-                    from: if minus_from { -from } else { from },
-                    to: if minus_to { -to } else { to },
+                    from: from,
+                    to: to,
                     item: Box::new(item),
                 })
             },
@@ -279,11 +285,9 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.lex.peek() {
             Some(Token::KwIf) => todo!(),
             Some(Token::KwWhile) => todo!(),
-            Some(Token::KwFor) => todo!(),
-            Some(Token::KwBegin) => todo!(),
-            Some(Token::Ident(s)) => {
-                Ok(self.parse_expression_or_assignment()?)
-            },
+            Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
+            Some(Token::KwBegin) => Ok(StatementNode::StatementBlock(self.parse_block()?)),
+            Some(Token::Ident(_)) => Ok(self.parse_expression_or_assignment()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -802,6 +806,51 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::LitInt(_)) => {
                 let int = self.expect_int_lit()?;
                 Ok(ExpressionNode::Literal(LiteralNode::Integer(int)))
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_for(&mut self) -> ParseResult<ForLoopNode> {
+        self.debug_print("For");
+
+        self.expect_token(&Token::KwFor)?;
+        let itername = self.expect_identifier()?;
+        self.expect_token(&Token::TkAssign)?;
+        let range = self.parse_range()?;
+        self.expect_token(&Token::KwDo)?;
+        let inner = self.parse_statement()?;
+
+        Ok(ForLoopNode {
+            iterating: StorageDeclarationNode {
+                dtype: DataType::One("integer".to_string()),
+                init: None, // will be initialized based on range
+                name: itername,
+            },
+            range: range,
+            inner: Box::new(inner),
+        })
+    }
+
+    pub fn parse_range(&mut self) -> ParseResult<Range> {
+        self.debug_print("Range");
+
+        let lhs = self.expect_int_lit_signed()?;
+        return Ok(self.parse_range_rest(lhs)?);
+    }
+
+    pub fn parse_range_rest(&mut self, lhs: i64) -> ParseResult<Range> {
+        self.debug_print("RangeRest");
+
+        match self.lex.peek() {
+            Some(Token::KwTo) => {
+                self.expect_token(&Token::KwTo)?;
+                Ok(Range::UpTo(lhs, self.expect_int_lit_signed()?))
+            },
+            Some(Token::KwDownto) => {
+                self.expect_token(&Token::KwDownto)?;
+                Ok(Range::DownTo(lhs, self.expect_int_lit_signed()?))
             },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
