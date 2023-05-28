@@ -36,7 +36,7 @@ MoreNames ->
 MoreNames -> , ident MoreNames
 
 Type -> ident
-Type -> kwArray [ litInt .. litInt ] kwOf ident
+Type -> kwArray [ litInt .. litInt ] kwOf Type
 
 Variables -> kwVar NamesWithType ; MoreNamesWithTypes2
 
