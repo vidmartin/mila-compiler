@@ -47,6 +47,7 @@ pub struct BinaryOperator {
 
 pub enum LiteralNode {
     Integer(i64),
+    String(String),
 }
 
 /// top level node for the entire program

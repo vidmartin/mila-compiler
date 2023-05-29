@@ -8,6 +8,7 @@ pub enum SyntaxError {
     Expected { expected: Token, gotten: Token },
     ExpectedIdentifier { gotten: Token },
     ExpectedIntLiteral { gotten: Token },
+    ExpectedStrLiteral { gotten: Token },
     Unexpected(Token),
     UnexpectedEnd,
     InvalidAssignment,
@@ -73,6 +74,16 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.lex.next() {
             Some(Token::LitInt(i)) => Ok(i),
             Some(tok) => Err(SyntaxError::ExpectedIntLiteral {
+                gotten: tok,
+            }),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    fn expect_str_lit(&mut self) -> ParseResult<String> {
+        match self.lex.next() {
+            Some(Token::LitStr(s)) => Ok(s),
+            Some(tok) => Err(SyntaxError::ExpectedStrLiteral {
                 gotten: tok,
             }),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -292,6 +303,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwIf |
                 Token::KwWhile |
                 Token::LitInt(_) |
+                Token::LitStr(_) |
                 Token::KwNot
             ) => {
                 let first_stmt = self.parse_statement()?;
@@ -432,7 +444,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         match self.lex.peek() {
             Some(Token::TkParClose) => Ok(Vec::new()),
-            Some(Token::KwNot | Token::TkSub | Token::TkParOpen | Token::LitInt(_) | Token::Ident(_)) => {
+            Some(
+                Token::KwNot |
+                Token::TkSub |
+                Token::TkParOpen |
+                Token::LitInt(_) |
+                Token::LitStr(_) |
+                Token::Ident(_)
+            ) => {
                 let first_param = self.parse_e0()?;
                 let mut more_params = self.parse_more_params()?;
                 more_params.insert(0, first_param);
@@ -662,7 +681,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     rhs: Some(Box::new(self.parse_e2()?)),
                 }))
             },
-            Some(Token::TkParOpen | Token::TkAdd | Token::TkSub | Token::Ident(_) | Token::LitInt(_)) => Ok(self.parse_e3()?),
+            Some(
+                Token::TkParOpen |
+                Token::TkAdd |
+                Token::TkSub |
+                Token::Ident(_) |
+                Token::LitInt(_) |
+                Token::LitStr(_)
+            ) => Ok(self.parse_e3()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -860,7 +886,12 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     rhs: Some(Box::new(self.parse_e6()?)),
                 }))
             },
-            Some(Token::TkParOpen | Token::Ident(_) | Token::LitInt(_)) => Ok(self.parse_e7()?),
+            Some(
+                Token::TkParOpen |
+                Token::Ident(_) |
+                Token::LitInt(_) |
+                Token::LitStr(_)
+            ) => Ok(self.parse_e7()?),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -881,6 +912,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let int = self.expect_int_lit()?;
                 ExpressionNode::Literal(LiteralNode::Integer(int))
             },
+            Some(Token::LitStr(_)) => {
+                let s = self.expect_str_lit()?;
+                ExpressionNode::Literal(LiteralNode::String(s))
+            }
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone()))?,
             None => Err(SyntaxError::UnexpectedEnd)?,
         };

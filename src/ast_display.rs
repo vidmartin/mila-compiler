@@ -223,6 +223,7 @@ impl fmt::Display for ast::LiteralNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ast::LiteralNode::Integer(integer) => writeln!(f, "integer({})", integer),
+            ast::LiteralNode::String(string) => writeln!(f, "string({})", string),
         }
     }
 }
