@@ -73,8 +73,7 @@ pub enum Token {
     KwNot,
     /// the "forward" keyword
     /// used for forward declarations
-    KwForward, // TODO: update lexer
-
+    KwForward,
     /// the ":" token
     /// used to annotate data types
     TkColon,
@@ -139,6 +138,9 @@ pub enum Token {
 
     /// integer literal
     LitInt(i64),
+
+    /// string literal
+    LitStr(String),
 }
 
 impl fmt::Display for Token {
@@ -172,6 +174,7 @@ pub fn parse_kw(s: &str) -> Option<Token> {
             "or"        => Token::KwOr,
             "and"       => Token::KwAnd,
             "not"       => Token::KwNot,
+            "forward"   => Token::KwForward,
             _           => None?
         }
     )

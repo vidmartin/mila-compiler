@@ -1,6 +1,4 @@
 
-use std::io::Read;
-
 use crate::tokens::{Token, self};
 
 #[derive(Clone, Copy)]
