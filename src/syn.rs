@@ -153,13 +153,59 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("Declaration");
 
         match self.lex.peek() {
-            Some(Token::KwFunction) => todo!(),
-            Some(Token::KwProcedure) => todo!(),
+            Some(Token::KwFunction) => Ok(Declaration::Function(self.parse_function()?)),
+            Some(Token::KwProcedure) => Ok(Declaration::Function(self.parse_callable()?)),
             Some(Token::KwConst) => Ok(Declaration::Constants(self.parse_constants()?)),
             Some(Token::KwVar) => Ok(Declaration::Variables(self.parse_variables()?)),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
+    }
+
+    pub fn parse_function(&mut self) -> ParseResult<CallableDeclarationNode> {
+        self.debug_print("Function");
+
+        let wip = self.parse_function_header()?;
+        return Ok(self.parse_function_or_procedure_rest(wip)?);
+    }
+
+    pub fn parse_function_header(&mut self) -> ParseResult<CallableDeclarationNode> {
+        self.debug_print("FunctionHeader");
+        
+        self.expect_token(&Token::KwFunction)?;
+        let name = self.expect_identifier()?;
+        self.expect_token(&Token::TkParOpen)?;
+        let params = self.parse_names_with_types()?;
+        self.expect_token(&Token::TkParClose)?;
+        self.expect_token(&Token::TkColon)?;
+        let rettype = self.expect_identifier()?;
+        self.expect_token(&Token::TkSemicolon)?;
+
+        todo!()
+    }
+
+    pub fn parse_procedure(&mut self) -> ParseResult<CallableDeclarationNode> {
+        self.debug_print("Procedure");
+        let wip = self.parse_procedure_header()?;
+        return Ok(self.parse_function_or_procedure_rest(wip)?);
+    }
+
+    pub fn parse_procedure_header(&mut self) -> ParseResult<CallableDeclarationNode> {
+        self.debug_print("ProcedureHeader");
+        
+        self.expect_token(&Token::KwProcedure)?;
+        let name = self.expect_identifier()?;
+        self.expect_token(&Token::TkParOpen)?;
+        let params = self.parse_names_with_types()?;
+        self.expect_token(&Token::TkParClose)?;
+        self.expect_token(&Token::TkSemicolon)?;
+
+        todo!()
+    }
+
+    pub fn parse_function_or_procedure_rest(&mut self, mut wip: CallableDeclarationNode) -> ParseResult<CallableDeclarationNode> {
+        self.debug_print("FunctionOrProcedureRest");
+        todo!()
     }
 
     pub fn parse_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
@@ -180,6 +226,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 }
             ).collect()
         )
+    }
+
+    pub fn parse_names_with_types(&mut self) -> ParseResult<Vec<(String, DataType)>> {
+        todo!()
     }
 
     pub fn parse_names_with_type(&mut self) -> ParseResult<Vec<(String, DataType)>> {
