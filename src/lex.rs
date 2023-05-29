@@ -88,6 +88,9 @@ impl<S: Iterator<Item = char>> Lexer<S> {
             '-' => Token::TkSub,
             '*' => Token::TkMul,
             ',' => Token::TkComma,
+            '\'' => {
+                return self.lex_str();
+            }
             c if c == '$' || c == '&' => {
                 self.advance()?;
                 return self.lex_num(if c == '$' { 16 } else { 8 });
@@ -156,6 +159,35 @@ impl<S: Iterator<Item = char>> Lexer<S> {
         }
         
         return Some(Token::LitInt(val));
+    }
+
+    fn lex_str(&mut self) -> Option<Token> {
+        if self.curr_char.is_none() || self.curr_char.unwrap() != '\'' {
+            return None;
+        }
+
+        let mut esc = false;
+        let mut s = String::new();
+        while let Some(c) = self.advance() {
+            if !esc {
+                if c == '\'' {
+                    break;
+                } else if c == '\\' {
+                    esc = true;
+                    continue;
+                }
+            }
+
+            esc = false;
+            s.push(c);
+        }
+
+        if let Some('\'') = self.curr_char {
+            self.advance();
+            return Some(Token::LitStr(s));
+        }
+
+        return None;
     }
 }
 
