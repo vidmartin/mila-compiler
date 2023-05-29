@@ -6,8 +6,6 @@ mod ast_display;
 mod syn;
 
 use std::io::{stdin, Read};
-use tokens::*;
-use lex::*;
 
 use llvm_sys;
 

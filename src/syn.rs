@@ -11,7 +11,6 @@ pub enum SyntaxError {
     ExpectedStrLiteral { gotten: Token },
     Unexpected(Token),
     UnexpectedEnd,
-    InvalidAssignment,
 }
 
 pub type ParseResult<TNode> = Result<TNode, SyntaxError>;
@@ -250,7 +249,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("MoreNamesWithTypes2");
 
         match self.lex.peek() {
-            Some(Token::Ident(name)) => {
+            Some(Token::Ident(_)) => {
                 let mut names_with_type = self.parse_names_with_type()?;
                 self.expect_token(&Token::TkSemicolon)?;
                 let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
@@ -494,7 +493,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("MoreConstants");
 
         match self.lex.peek() {
-            Some(Token::Ident(s)) => {
+            Some(Token::Ident(_)) => {
                 let first_constant = self.parse_constant()?;
                 self.expect_token(&Token::TkSemicolon)?;
                 let mut constants = self.parse_more_constants()?;
