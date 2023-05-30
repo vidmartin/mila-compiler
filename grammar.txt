@@ -22,9 +22,6 @@ FunctionOrProcedureRest -> kwForward ;
 NamesWithTypes ->
 NamesWithTypes -> NamesWithType MoreNamesWithTypes
 
-MoreNamesWithTypesSemicolon -> 
-MoreNamesWithTypesSemicolon -> NamesWithType MoreNamesWithTypesSemicolon ;
-
 MoreNamesWithTypes ->
 MoreNamesWithTypes -> ; NamesWithType MoreNamesWithTypes
 
