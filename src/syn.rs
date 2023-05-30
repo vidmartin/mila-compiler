@@ -405,23 +405,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         }
     }
 
-    pub fn parse_more_names_with_types_2(&mut self) -> ParseResult<Vec<(String, DataType)>> {
-        self.debug_print("MoreNamesWithTypes2");
-
-        match self.peek() {
-            Some(Token::Ident(_)) => {
-                let mut names_with_type = self.parse_names_with_type()?;
-                self.expect_token(&Token::TkSemicolon)?;
-                let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
-                names_with_type.append(&mut more_names_with_types_2);
-                Ok(names_with_type)
-            },
-            Some(Token::TkSemicolon | Token::KwBegin) => Ok(Vec::new()),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
-        }
-    }
-
     pub fn parse_block(&mut self) -> ParseResult<StatementBlockNode> {
         self.debug_print("Block");
 
