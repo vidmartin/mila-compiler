@@ -302,7 +302,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 first.append(&mut rest);
                 Ok(first)
             },
-            Some(Token::TkParClose | Token::TkSemicolon | Token::KwBegin) => Ok(Vec::new()),
+            Some(Token::TkParClose | Token::TkSemicolon) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -336,7 +336,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     }
                 }
             },
-            Some(Token::TkParClose | Token::KwBegin) => Ok(Vec::new()),
+            Some(Token::TkParClose) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -420,8 +420,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwEnd) => Ok(Vec::new()),
             Some(
                 Token::TkParOpen |
-                Token::TkComma |
-                Token::TkDot |
+                Token::TkAdd |
+                Token::TkSub |
                 Token::Ident(_) |
                 Token::KwBegin |
                 Token::KwExit |
@@ -462,7 +462,15 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwWhile) => Ok(StatementNode::WhileLoop(self.parse_while()?)),
             Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
             Some(Token::KwBegin) => Ok(StatementNode::StatementBlock(self.parse_block()?)),
-            Some(Token::Ident(_)) => Ok(self.parse_expression_or_assignment()?),
+            Some(
+                Token::TkParOpen |
+                Token::TkAdd |
+                Token::TkSub |
+                Token::Ident(_) |
+                Token::LitInt(_) |
+                Token::LitStr(_) |
+                Token::KwNot
+            ) => Ok(self.parse_expression_or_assignment()?),
             Some(Token::KwExit) => {
                 self.expect_token(&Token::KwExit)?;
                 Ok(StatementNode::Exit)
@@ -539,6 +547,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(
                 Token::KwNot |
                 Token::TkSub |
+                Token::TkAdd |
                 Token::TkParOpen |
                 Token::LitInt(_) |
                 Token::LitStr(_) |
