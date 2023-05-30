@@ -80,6 +80,15 @@ impl fmt::Display for ast::CallableDeclarationNode {
             }
         }
 
+        if self.variables.is_empty() {
+            writeln!(f, "  - variables: (empty)")?;
+        } else {
+            writeln!(f, "  - variables:")?;
+            for var in self.variables.iter() {
+                writeln!(f, "      - {} : {}", var.name, var.dtype)?;
+            }
+        }
+
         if let Some(im) = self.implementation.as_ref() {
             writeln!(f, "  - implementation:")?;
             let s = format!("{}", im);
