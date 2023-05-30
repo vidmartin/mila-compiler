@@ -597,7 +597,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwWhile |
                 Token::KwTo |
                 Token::KwDownto |
-                Token::KwEnd
+                Token::KwEnd |
+                Token::KwElse
             ) => Ok(None),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
@@ -692,7 +693,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         let lhs = self.parse_e0()?;
 
-        match self.parse_expression_or_assigment_rest()? {
+        match self.parse_expression_or_assignment_rest()? {
             Some(rhs) => {
                 Ok(StatementNode::Assignment(AssignmentNode {
                     target: lhs,
@@ -703,7 +704,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         }
     }
 
-    pub fn parse_expression_or_assigment_rest(&mut self) -> ParseResult<Option<ExpressionNode>> {
+    pub fn parse_expression_or_assignment_rest(&mut self) -> ParseResult<Option<ExpressionNode>> {
         self.debug_print("ExpressionOrAssignmentRest");
 
         match self.peek() {
