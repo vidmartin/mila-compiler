@@ -246,7 +246,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             },
             Some(Token::KwForward) => {
                 self.expect_token(&Token::KwForward)?;
-                self.expect_token(&Token::TkSemicolon)?;
 
                 Ok(wip) // leave implementation at None
             },
