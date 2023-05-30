@@ -16,8 +16,8 @@ Procedure -> ProcedureHeader FunctionOrProcedureRest
 
 ProcedureHeader -> kwProcedure ident ( NamesWithTypes ) ;
 
-FunctionOrProcedureRest -> MaybeVariablesWithSemicolon Block ;
-FunctionOrProcedureRest -> kwForward ;
+FunctionOrProcedureRest -> MaybeVariablesWithSemicolon Block
+FunctionOrProcedureRest -> kwForward
 
 NamesWithTypes ->
 NamesWithTypes -> NamesWithType MoreNamesWithTypes
