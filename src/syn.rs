@@ -415,23 +415,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(StatementBlockNode { statements: statements })
     }
 
-    // pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
-    //     self.debug_print("Statements");
-
-    //     match self.lex.peek() {
-    //         Some(Token::KwEnd) => Ok(Vec::new()),
-    //         Some(Token::KwBegin | Token::KwIf | Token::KwWhile | Token::KwFor | Token::Ident(_)) => {
-    //             let first_statement = self.parse_statement()?;
-    //             self.expect_token(&Token::TkSemicolon)?;
-    //             let mut more_statements = self.parse_statements()?;
-    //             more_statements.insert(0, first_statement);
-    //             Ok(more_statements)
-    //         }
-    //         Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-    //         None => Err(SyntaxError::UnexpectedEnd),
-    //     }
-    // }
-
     pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
         match self.peek() {
             Some(Token::KwEnd) => Ok(Vec::new()),
@@ -488,45 +471,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             None => Err(SyntaxError::UnexpectedEnd),
         }
     }
-
-    // pub fn parse_assign_or_call(&mut self) -> ParseResult<StatementNode> {
-    //     self.debug_print("AssignOrCall");
-
-    //     let target = self.expect_identifier()?;
-    //     match self.parse_assign_or_call_rest()? {
-    //         AssignOrCall::Assign(lhs) => Ok(
-    //             StatementNode::Assignment(
-    //                 AssignmentNode { varname: target, value: lhs }
-    //             )
-    //         ),
-    //         AssignOrCall::Call(params) => Ok(
-    //             StatementNode::Expression(
-    //                 ExpressionNode::Call(
-    //                     CallNode { callable_name: target, params: params }
-    //                 )
-    //             )
-    //         ),
-    //     }
-    // }
-
-    // pub fn parse_assign_or_call_rest(&mut self) -> ParseResult<AssignOrCall> {
-    //     self.debug_print("AssignOrCallRest");
-
-    //     match self.lex.peek() {
-    //         Some(Token::TkParOpen) => {
-    //             self.expect_token(&Token::TkParOpen)?;
-    //             let params = self.parse_params()?;
-    //             self.expect_token(&Token::TkParClose)?;
-    //             Ok(AssignOrCall::Call(params))
-    //         },
-    //         Some(Token::TkAssign) => {
-    //             self.expect_token(&Token::TkAssign)?;
-    //             Ok(AssignOrCall::Assign(self.parse_expression()?))
-    //         },
-    //         Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-    //         None => Err(SyntaxError::UnexpectedEnd),
-    //     }
-    // }
 
     pub fn parse_read_or_call(&mut self) -> ParseResult<ExpressionNode> {
         self.debug_print("ReadOrCall");
@@ -1218,8 +1162,3 @@ pub enum Declaration {
     Function(CallableDeclarationNode),
     Procedure(CallableDeclarationNode)
 }
-
-// pub enum AssignOrCall {
-//     Assign(ExpressionNode),
-//     Call(Vec<ExpressionNode>),
-// }
