@@ -63,6 +63,7 @@ Statement -> While
 Statement -> For
 Statement -> Block
 Statement -> ExpressionOrAssignment
+Statement -> kwExit
 
 Params ->
 Params -> E0 MoreParams
