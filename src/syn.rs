@@ -420,6 +420,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkDot |
                 Token::Ident(_) |
                 Token::KwBegin |
+                Token::KwExit |
                 Token::KwFor |
                 Token::KwIf |
                 Token::KwWhile |
@@ -458,6 +459,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
             Some(Token::KwBegin) => Ok(StatementNode::StatementBlock(self.parse_block()?)),
             Some(Token::Ident(_)) => Ok(self.parse_expression_or_assignment()?),
+            Some(Token::KwExit) => {
+                self.expect_token(&Token::KwExit)?;
+                Ok(StatementNode::Exit)
+            },
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }

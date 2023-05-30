@@ -158,6 +158,9 @@ impl fmt::Display for ast::StatementNode {
                 writeln!(f, "  - inner: ")?;
                 let s = format!("{}", wloop.inner);
                 writeln!(f, "{}", indent(s, 8, true))?;
+            },
+            ast::StatementNode::Exit => {
+                writeln!(f, "exit")?;
             }
         }
 

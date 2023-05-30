@@ -11,7 +11,8 @@ pub enum StatementNode {
     Expression(ExpressionNode),
     ForLoop(ForLoopNode),
     WhileLoop(WhileLoopNode),
-    IfStatement(IfStatementNode)
+    IfStatement(IfStatementNode),
+    Exit,
 }
 
 pub struct IfStatementNode {
