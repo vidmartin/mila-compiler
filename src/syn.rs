@@ -129,6 +129,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.lex.peek() {
             Some(Token::KwConst | Token::KwVar | Token::KwFunction | Token::KwProcedure) => {
                 let first_declaration = self.parse_declaration()?;
+                self.expect_token(&Token::TkSemicolon)?;
                 let mut rest_of_declarations = self.parse_declarations()?;
                 match first_declaration {
                     Declaration::Variables(mut storage_nodes) => rest_of_declarations.variables.append(&mut storage_nodes),
