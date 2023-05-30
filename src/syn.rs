@@ -236,8 +236,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         
         match self.peek() {
             Some(Token::KwBegin | Token::KwVar) => {
-                let vars = self.parse_maybe_variables()?;
-                self.expect_token(&Token::TkSemicolon)?;
+                let vars = self.parse_maybe_variables_with_semicolon()?;
                 let implementation = self.parse_block()?;
                 
                 wip.variables = vars;
@@ -256,11 +255,15 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         }
     }
 
-    pub fn parse_maybe_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
+    pub fn parse_maybe_variables_with_semicolon(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
         self.debug_print("MaybeVariables");
 
         match self.peek() {
-            Some(Token::KwVar) => Ok(self.parse_variables()?),
+            Some(Token::KwVar) => { 
+                let vars = self.parse_variables()?;
+                self.expect_token(&Token::TkSemicolon)?;
+                Ok(vars)
+            },
             Some(Token::KwBegin) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
