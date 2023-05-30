@@ -110,7 +110,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             name: "main".to_string(),
             param_types: Vec::new(),
             variables: Vec::new(),
-            return_type: Some("integer".to_string()),
+            return_type: Some(DataType::One("integer".to_string())),
             implementation: Some(main_block),
         };
         declarations.callables.push(main_func);
@@ -154,7 +154,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         match self.lex.peek() {
             Some(Token::KwFunction) => Ok(Declaration::Function(self.parse_function()?)),
-            Some(Token::KwProcedure) => Ok(Declaration::Function(self.parse_callable()?)),
+            Some(Token::KwProcedure) => Ok(Declaration::Procedure(self.parse_procedure()?)),
             Some(Token::KwConst) => Ok(Declaration::Constants(self.parse_constants()?)),
             Some(Token::KwVar) => Ok(Declaration::Variables(self.parse_variables()?)),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
@@ -181,7 +181,13 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         let rettype = self.expect_identifier()?;
         self.expect_token(&Token::TkSemicolon)?;
 
-        todo!()
+        Ok(CallableDeclarationNode {
+            implementation: None,
+            name: name,
+            param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
+            return_type: Some(DataType::One(rettype)),
+            variables: Vec::new()
+        })
     }
 
     pub fn parse_procedure(&mut self) -> ParseResult<CallableDeclarationNode> {
@@ -200,12 +206,48 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.expect_token(&Token::TkParClose)?;
         self.expect_token(&Token::TkSemicolon)?;
 
-        todo!()
+        Ok(CallableDeclarationNode {
+            implementation: None,
+            name: name,
+            param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
+            return_type: None,
+            variables: Vec::new()
+        })
     }
 
     pub fn parse_function_or_procedure_rest(&mut self, mut wip: CallableDeclarationNode) -> ParseResult<CallableDeclarationNode> {
         self.debug_print("FunctionOrProcedureRest");
-        todo!()
+        
+        match self.lex.peek() {
+            Some(Token::KwBegin | Token::KwVar) => {
+                let vars = self.parse_maybe_variables()?;
+                let implementation = self.parse_block()?;
+                
+                wip.variables = vars;
+                wip.implementation = Some(implementation);
+
+                Ok(wip)
+            },
+            Some(Token::KwForward) => {
+                self.expect_token(&Token::KwForward)?;
+                self.expect_token(&Token::TkSemicolon)?;
+
+                Ok(wip) // leave implementation at None
+            },
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_maybe_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
+        self.debug_print("MaybeVariables");
+
+        match self.lex.peek() {
+            Some(Token::KwVar) => Ok(self.parse_variables()?),
+            Some(Token::KwBegin) => Ok(Vec::new()),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 
     pub fn parse_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
@@ -229,7 +271,36 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_names_with_types(&mut self) -> ParseResult<Vec<(String, DataType)>> {
-        todo!()
+        self.debug_print("NamesWithTypes");
+
+        match self.lex.peek() {
+            Some(Token::Ident(_)) => {
+                let mut first = self.parse_names_with_type()?;
+                let mut rest = self.parse_more_names_with_types()?;
+                first.append(&mut rest);
+                Ok(first)
+            },
+            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
+    }
+
+    pub fn parse_more_names_with_types(&mut self) -> ParseResult<Vec<(String, DataType)>> {
+        self.debug_print("MoreNamesWithTypes");
+
+        match self.lex.peek() {
+            Some(Token::TkSemicolon) => {
+                self.expect_token(&Token::TkSemicolon)?;
+                let mut first = self.parse_names_with_type()?;
+                let mut rest = self.parse_more_names_with_types()?;
+                first.append(&mut rest);
+                Ok(first)
+            },
+            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
+            None => Err(SyntaxError::UnexpectedEnd),
+        }
     }
 
     pub fn parse_names_with_type(&mut self) -> ParseResult<Vec<(String, DataType)>> {
