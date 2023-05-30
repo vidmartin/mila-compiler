@@ -16,7 +16,7 @@ Procedure -> ProcedureHeader FunctionOrProcedureRest
 
 ProcedureHeader -> kwProcedure ident ( NamesWithTypes ) ;
 
-FunctionOrProcedureRest -> MaybeVariables Block ;
+FunctionOrProcedureRest -> MaybeVariables ; Block ;
 FunctionOrProcedureRest -> kwForward ;
 
 NamesWithTypes ->
