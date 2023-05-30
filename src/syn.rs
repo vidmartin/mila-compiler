@@ -645,7 +645,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         self.expect_token(&Token::KwConst)?;
         let first_constant = self.parse_constant()?;
-        self.expect_token(&Token::TkSemicolon)?;
         let mut more_constants = self.parse_more_constants()?;
         more_constants.insert(0, first_constant);
         Ok(more_constants)
@@ -654,17 +653,20 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_constants(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
         self.debug_print("MoreConstants");
 
+        self.expect_token(&Token::TkSemicolon)?;
+
         match self.peek() {
             Some(Token::Ident(_)) => {
                 let first_constant = self.parse_constant()?;
-                self.expect_token(&Token::TkSemicolon)?;
                 let mut constants = self.parse_more_constants()?;
                 constants.insert(0, first_constant);
                 Ok(constants)
             },
-            Some(Token::KwBegin | Token::KwConst | Token::KwFunction | Token::KwProcedure | Token::KwVar) => Ok(Vec::new()),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            _ => {
+                // this is yet again a hack for resolving first-follow conflict by escaping the confines of LL(1) parsing
+                self.unlex.push(Token::TkSemicolon);
+                Ok(Vec::new())
+            }
         }
     }
 
