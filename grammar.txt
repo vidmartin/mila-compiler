@@ -1,7 +1,7 @@
 Program -> kwProgram ident ; Declarations Block .
 
 Declarations -> 
-Declarations -> Declaration Declarations
+Declarations -> Declaration ; Declarations
 
 Declaration -> Function
 Declaration -> Procedure
