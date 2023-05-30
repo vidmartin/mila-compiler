@@ -17,23 +17,38 @@ pub type ParseResult<TNode> = Result<TNode, SyntaxError>;
 
 pub struct Parser<'a, TLex : Iterator<Item = Token>> {
     lex: &'a mut Peekable<TLex>,
+    unlex: Vec<Token>,
 }
 
 impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn new(lex: &'a mut Peekable<TLex>) -> Self {
-        Self { lex: lex }
+        Self { lex: lex, unlex: Vec::new(), }
     }
 
     fn debug_print(&mut self, s: &str) {
-        if let Some(tok) = self.lex.peek() {
+        if let Some(tok) = self.peek() {
             println!("{}, {}", s, tok);
         } else {
             println!("{}, end of file", s);
         }
     }
 
+    fn peek(&mut self) -> Option<&Token> {
+        if let Some(tok) = self.unlex.last() {
+            return Some(tok)
+        }
+        self.lex.peek()
+    }
+
+    fn next(&mut self) -> Option<Token> {
+        if let Some(tok) = self.unlex.pop() {
+            return Some(tok);
+        }
+        self.lex.next()
+    }
+
     fn expect_token(&mut self, token: &Token) -> ParseResult<()> {
-        match self.lex.next() {
+        match self.next() {
             Some(tok) => {
                 if tok == *token {
                     Ok(())
@@ -49,7 +64,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn expect_token_maybe(&mut self, token: &Token) -> ParseResult<bool> {
-        if let Some(tok) = self.lex.peek() {
+        if let Some(tok) = self.peek() {
             if *tok == *token {
                 self.expect_token(token)?;
                 return Ok(true);
@@ -60,7 +75,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn expect_identifier(&mut self) -> ParseResult<String> {
-        match self.lex.next() {
+        match self.next() {
             Some(Token::Ident(s)) => Ok(s),
             Some(tok) => Err(SyntaxError::ExpectedIdentifier {
                 gotten: tok,
@@ -70,7 +85,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn expect_int_lit(&mut self) -> ParseResult<i64> {
-        match self.lex.next() {
+        match self.next() {
             Some(Token::LitInt(i)) => Ok(i),
             Some(tok) => Err(SyntaxError::ExpectedIntLiteral {
                 gotten: tok,
@@ -80,7 +95,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn expect_str_lit(&mut self) -> ParseResult<String> {
-        match self.lex.next() {
+        match self.next() {
             Some(Token::LitStr(s)) => Ok(s),
             Some(tok) => Err(SyntaxError::ExpectedStrLiteral {
                 gotten: tok,
@@ -126,7 +141,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_declarations(&mut self) -> ParseResult<ProgramDeclarations> {
         self.debug_print("Declarations");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwConst | Token::KwVar | Token::KwFunction | Token::KwProcedure) => {
                 let first_declaration = self.parse_declaration()?;
                 self.expect_token(&Token::TkSemicolon)?;
@@ -153,7 +168,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_declaration(&mut self) -> ParseResult<Declaration> {
         self.debug_print("Declaration");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwFunction) => Ok(Declaration::Function(self.parse_function()?)),
             Some(Token::KwProcedure) => Ok(Declaration::Procedure(self.parse_procedure()?)),
             Some(Token::KwConst) => Ok(Declaration::Constants(self.parse_constants()?)),
@@ -219,7 +234,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_function_or_procedure_rest(&mut self, mut wip: CallableDeclarationNode) -> ParseResult<CallableDeclarationNode> {
         self.debug_print("FunctionOrProcedureRest");
         
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwBegin | Token::KwVar) => {
                 let vars = self.parse_maybe_variables()?;
                 let implementation = self.parse_block()?;
@@ -243,7 +258,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_maybe_variables(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
         self.debug_print("MaybeVariables");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwVar) => Ok(self.parse_variables()?),
             Some(Token::KwBegin) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
@@ -255,10 +270,13 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("Variables");
 
         self.expect_token(&Token::KwVar)?;
-        let mut names_with_type = self.parse_names_with_type()?;
-        self.expect_token(&Token::TkSemicolon)?;
-        let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
-        names_with_type.append(&mut more_names_with_types_2);
+
+        let names_with_type = self.parse_names_with_types()?;
+
+        // let mut names_with_type = self.parse_names_with_type()?;
+        // self.expect_token(&Token::TkSemicolon)?;
+        // let mut more_names_with_types_2 = self.parse_more_names_with_types_2()?;
+        // names_with_type.append(&mut more_names_with_types_2);
 
         Ok(
             names_with_type.into_iter().map(
@@ -274,14 +292,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_names_with_types(&mut self) -> ParseResult<Vec<(String, DataType)>> {
         self.debug_print("NamesWithTypes");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::Ident(_)) => {
                 let mut first = self.parse_names_with_type()?;
                 let mut rest = self.parse_more_names_with_types()?;
                 first.append(&mut rest);
                 Ok(first)
             },
-            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(Token::TkParClose | Token::TkSemicolon | Token::KwBegin) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -290,15 +308,32 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_names_with_types(&mut self) -> ParseResult<Vec<(String, DataType)>> {
         self.debug_print("MoreNamesWithTypes");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkSemicolon) => {
                 self.expect_token(&Token::TkSemicolon)?;
-                let mut first = self.parse_names_with_type()?;
-                let mut rest = self.parse_more_names_with_types()?;
-                first.append(&mut rest);
-                Ok(first)
+
+                // this match expression & the 'unlex' field is the hack for
+                // resolving the first-follow conflict on this nonterminal
+                match self.peek() {
+                    Some(Token::Ident(_)) => {
+                        // identifier, so more variable definitions,
+                        // so we continue expanding this rule
+
+                        let mut first = self.parse_names_with_type()?;
+                        let mut rest = self.parse_more_names_with_types()?;
+                        first.append(&mut rest);
+                        Ok(first)
+                    },
+                    _ => {
+                        // not an identifier, we're actually reading
+                        // a whole new declaration
+
+                        self.unlex.push(Token::TkSemicolon);
+                        Ok(Vec::new())
+                    }
+                }
             },
-            Some(Token::TkParClose) => Ok(Vec::new()),
+            Some(Token::TkParClose | Token::KwBegin) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -327,7 +362,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_names(&mut self) -> ParseResult<Vec<String>> {
         self.debug_print("MoreNames");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkColon) => Ok(Vec::new()),
             Some(Token::TkComma) => {
                 self.expect_token(&Token::TkComma)?;
@@ -344,7 +379,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_type(&mut self) -> ParseResult<DataType> {
         self.debug_print("Type");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::Ident(_)) => Ok(DataType::One(self.expect_identifier()?)),
             Some(Token::KwArray) => {
                 self.expect_token(&Token::KwArray)?;
@@ -370,7 +405,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_names_with_types_2(&mut self) -> ParseResult<Vec<(String, DataType)>> {
         self.debug_print("MoreNamesWithTypes2");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::Ident(_)) => {
                 let mut names_with_type = self.parse_names_with_type()?;
                 self.expect_token(&Token::TkSemicolon)?;
@@ -378,7 +413,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 names_with_type.append(&mut more_names_with_types_2);
                 Ok(names_with_type)
             },
-            Some(Token::KwConst | Token::KwVar | Token::KwFunction | Token::KwProcedure | Token::KwBegin) => Ok(Vec::new()),
+            Some(Token::TkSemicolon | Token::KwBegin) => Ok(Vec::new()),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
             None => Err(SyntaxError::UnexpectedEnd),
         }
@@ -412,7 +447,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     // }
 
     pub fn parse_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwEnd) => Ok(Vec::new()),
             Some(
                 Token::TkParOpen |
@@ -439,7 +474,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     pub fn parse_more_statements(&mut self) -> ParseResult<Vec<StatementNode>> {
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwEnd) => Ok(Vec::new()),
             Some(Token::TkSemicolon) => {
                 self.expect_token(&Token::TkSemicolon)?;
@@ -453,7 +488,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_statement(&mut self) -> ParseResult<StatementNode> {
         self.debug_print("Statement");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwIf) => Ok(StatementNode::IfStatement(self.parse_if()?)),
             Some(Token::KwWhile) => Ok(StatementNode::WhileLoop(self.parse_while()?)),
             Some(Token::KwFor) => Ok(StatementNode::ForLoop(self.parse_for()?)),
@@ -526,7 +561,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_read_or_call_rest(&mut self) -> ParseResult<Option<Vec<ExpressionNode>>> {
         self.debug_print("ReadOrCallRest");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkParOpen) => {
                 self.expect_token(&Token::TkParOpen)?;
                 let params = self.parse_params()?;
@@ -568,7 +603,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_params(&mut self) -> ParseResult<Vec<ExpressionNode>> {
         self.debug_print("Params");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkParClose) => Ok(Vec::new()),
             Some(
                 Token::KwNot |
@@ -591,7 +626,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_params(&mut self) -> ParseResult<Vec<ExpressionNode>> {
         self.debug_print("MoreParams");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkParClose) => Ok(Vec::new()),
             Some(Token::TkComma) => {
                 self.expect_token(&Token::TkComma)?;
@@ -619,7 +654,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_constants(&mut self) -> ParseResult<Vec<StorageDeclarationNode>> {
         self.debug_print("MoreConstants");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::Ident(_)) => {
                 let first_constant = self.parse_constant()?;
                 self.expect_token(&Token::TkSemicolon)?;
@@ -665,7 +700,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_expression_or_assigment_rest(&mut self) -> ParseResult<Option<ExpressionNode>> {
         self.debug_print("ExpressionOrAssignmentRest");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkAssign) => {
                 self.expect_token(&Token::TkAssign)?;
                 Ok(Some(self.parse_e0()?))
@@ -686,7 +721,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e0(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("MoreE0");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ Token::KwOr) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
@@ -745,7 +780,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e1(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("MoreE1");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ Token::KwAnd) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
@@ -798,7 +833,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_e2(&mut self) -> ParseResult<ExpressionNode> {
         self.debug_print("E2");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::KwNot) => {
                 self.expect_token(&Token::KwNot)?;
                 Ok(ExpressionNode::BinOp(BinaryOperator {
@@ -830,7 +865,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_e3r(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("E3R");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ (Token::TkLess | Token::TkLessOrEq | Token::TkMore | Token::TkMoreOrEq | Token::TkEq | Token::TkNotEq)) => {
                 let op = op.clone();
 
@@ -873,7 +908,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e4(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("MoreE4");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ (Token::TkAdd | Token::TkSub)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
@@ -940,7 +975,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e5(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("MoreE5");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ (Token::TkMul | Token::KwDiv | Token::KwMod)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
@@ -1002,7 +1037,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_e6(&mut self) -> ParseResult<ExpressionNode> {
         self.debug_print("E6");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(op @ (Token::TkAdd | Token::TkSub)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
@@ -1026,7 +1061,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_e7(&mut self) -> ParseResult<ExpressionNode> {
         self.debug_print("E7");
 
-        let expr = match self.lex.peek() {
+        let expr = match self.peek() {
             Some(Token::TkParOpen) => {
                 self.expect_token(&Token::TkParOpen)?;
                 let expr = self.parse_e0()?;
@@ -1052,7 +1087,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_more_e7(&mut self, lhs: ExpressionNode) -> ParseResult<ExpressionNode> {
         self.debug_print("MoreE7");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkSqOpen) => {
                 self.expect_token(&Token::TkSqOpen)?;
                 let expr = self.parse_e0()?;
@@ -1124,7 +1159,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_range_rest(&mut self, lhs: ExpressionNode) -> ParseResult<BinaryOperator> {
         self.debug_print("RangeRest");
 
-        let op = match self.lex.peek() {
+        let op = match self.peek() {
             Some(tok @ (Token::KwTo | Token::KwDownto)) => tok.clone(),
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone()))?,
             None => Err(SyntaxError::UnexpectedEnd)?,
@@ -1158,7 +1193,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     pub fn parse_maybe_else(&mut self) -> ParseResult<Option<StatementNode>> {
         self.debug_print("MaybeElse");
 
-        match self.lex.peek() {
+        match self.peek() {
             Some(Token::TkSemicolon | Token::KwEnd) => Ok(None),
             Some(Token::KwElse) => Ok(Some(self.parse_else()?)), // hack for first-follow conflict
             Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
