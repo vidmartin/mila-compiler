@@ -16,7 +16,7 @@ Procedure -> ProcedureHeader FunctionOrProcedureRest
 
 ProcedureHeader -> kwProcedure ident ( NamesWithTypes ) ;
 
-FunctionOrProcedureRest -> MaybeVariables ; Block ;
+FunctionOrProcedureRest -> MaybeVariablesWithSemicolon Block ;
 FunctionOrProcedureRest -> kwForward ;
 
 NamesWithTypes ->
@@ -37,8 +37,8 @@ Type -> kwArray [ litInt .. litInt ] kwOf Type
 
 Variables -> kwVar NamesWithTypes
 
-MaybeVariables ->
-MaybeVariables -> Variables
+MaybeVariablesWithSemicolon ->
+MaybeVariablesWithSemicolon -> Variables ;
 
 Constants -> kwConst Constant MoreConstants
 
