@@ -162,6 +162,7 @@ pub fn parse_kw(s: &str) -> Option<Token> {
             "do"        => Token::KwDo,
             "if"        => Token::KwIf,
             "then"      => Token::KwThen,
+            "else"      => Token::KwElse,
             "to"        => Token::KwTo,
             "downto"    => Token::KwDownto,
             "div"       => Token::KwDiv,
