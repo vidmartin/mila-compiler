@@ -237,6 +237,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.peek() {
             Some(Token::KwBegin | Token::KwVar) => {
                 let vars = self.parse_maybe_variables()?;
+                self.expect_token(&Token::TkSemicolon)?;
                 let implementation = self.parse_block()?;
                 
                 wip.variables = vars;
