@@ -1,17 +1,46 @@
 
 use llvm_sys as llvm;
-use crate::ast;
+use crate::ast::{self, LiteralNode};
 
 pub enum GenError {
     MissingModule,
     InvalidContext,
     InvalidString,
     InvalidDataType,
+    NameConflict,
+    TypeMismatch,
 }
 
 pub struct LlvmTypes {
     i64: *mut llvm::LLVMType,
     i32: *mut llvm::LLVMType,
+    void: *mut llvm::LLVMType,
+}
+
+impl LlvmTypes {
+    pub fn new() -> Self {
+        unsafe {
+            Self {
+                i32: llvm_sys::core::LLVMInt32Type(),
+                i64: llvm_sys::core::LLVMInt64Type(),
+                void: llvm_sys::core::LLVMVoidType(),
+            }
+        }
+    }
+
+    pub fn get_type(&self, ast_type: Option<&ast::DataType>) -> Result<*mut llvm::LLVMType, GenError> {
+        match ast_type {
+            Some(ast::DataType::One(dtype)) => {
+                match dtype.as_str() {
+                    "integer" => Ok(self.i64),
+                    _ => return Err(GenError::InvalidDataType),
+                }
+            },
+            Some(ast::DataType::OneInternal(dtype)) => Ok(*dtype),
+            Some(ast::DataType::Array { item, from, to }) => todo!(),
+            None => Ok(self.void),
+        }
+    }
 }
 
 pub struct Scope<'a> {
@@ -38,25 +67,18 @@ impl<'a> Scope<'a> {
         return None;
     }
 
-    pub fn set(&mut self, name: &str, val: *mut llvm::LLVMValue) {
+    pub fn set(&mut self, name: &str, val: *mut llvm::LLVMValue) -> Result<(), GenError> {
+        if self.map.contains_key(name) {
+            return Err(GenError::NameConflict);
+        }
         self.map.insert(name.to_string(), val);
+        return Ok(());
     }
 
     pub fn sub(&'a self) -> Self {
         let mut scope = Self::new();
         scope.parent = Some(self);
         return scope;
-    }
-}
-
-impl LlvmTypes {
-    pub fn new() -> Self {
-        unsafe {
-            Self {
-                i32: llvm_sys::core::LLVMInt32Type(),
-                i64: llvm_sys::core::LLVMInt64Type(),
-            }
-        }
     }
 }
 
@@ -128,25 +150,68 @@ impl CodeGen for ast::ProgramNode {
         let mut global_scope = Scope::new();
 
         for variable in self.declarations.variables.iter() {
-            match &variable.dtype {
+            // TODO: arrays
+
+            let llvm_type = ctx.types.get_type(Some(&variable.dtype))?;
+
+            let cstr = std::ffi::CString::new(
+                variable.name.as_str()
+            ).map_err(|_| GenError::InvalidString)?;
+
+            unsafe {
+                let gvref = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
+
+                global_scope.set(&variable.name, gvref)?;
+            }
+        }
+
+        for constant in self.declarations.constants.iter() {
+            match &constant.dtype {
                 ast::DataType::One(dtype) => {
                     match dtype.as_str() {
                         "integer" => unsafe {
-                            let cstr = std::ffi::CString::new(
-                                variable.name.as_str()
-                            ).map_err(|_| GenError::InvalidString)?;
-                            let gvref = llvm::core::LLVMAddGlobal(
-                                ctx.get_module()?,
-                                ctx.types.i64,
-                                cstr.as_ptr(),
+                            let value = match constant.init {
+                                Some(LiteralNode::Integer(i)) => i,
+                                _ => return Err(GenError::TypeMismatch),
+                            };
+
+                            let vref = llvm::core::LLVMConstInt(
+                                ctx.types.get_type(Some(&constant.dtype))?,
+                                *((&value) as *const i64 as *const u64),
+                                0
                             );
-                            global_scope.set(&variable.name, gvref);
+                            
+                            global_scope.set(&constant.name, vref)?;
                         },
                         _ => return Err(GenError::InvalidDataType),
                     }
                 },
+                ast::DataType::OneInternal(dtype) => {
+                    return Err(GenError::InvalidDataType);
+                },
                 ast::DataType::Array { item, from, to } => todo!(),
             }
+        }
+
+        for callable in self.declarations.callables.iter() {
+            // TODO: forward refs
+
+            let cstr = std::ffi::CString::new(
+                callable.name.clone()
+            ).map_err(|_| GenError::InvalidString)?;
+
+            let return_type = ctx.types.get_type(callable.return_type.as_ref())?;
+            let mut param_types = callable.param_types.iter().map(
+                |ptype| ctx.types.get_type(Some(ptype))
+            ).collect::<Result<Vec<*mut llvm::LLVMType>, GenError>>()?;
+
+            unsafe {
+                let fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
+                let fn_ref = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), fn_type);
+                global_scope.set(&callable.name, fn_ref)?;
+            }
+
+            // llvm::core::LLVMBuildAlloca(arg1, Ty, Name)
         }
 
         todo!()

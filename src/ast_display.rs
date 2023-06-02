@@ -57,6 +57,7 @@ impl fmt::Display for ast::DataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ast::DataType::One(typename) => write!(f, "{}", typename),
+            ast::DataType::OneInternal(_) => write!(f, "(internal data type)"),
             ast::DataType::Array { item, from, to } => write!(f, "array [{} .. {}] of {}", from, to, item),
         }
     }
@@ -80,22 +81,23 @@ impl fmt::Display for ast::CallableDeclarationNode {
             }
         }
 
-        if self.variables.is_empty() {
-            writeln!(f, "  - variables: (empty)")?;
-        } else {
-            writeln!(f, "  - variables:")?;
-            for var in self.variables.iter() {
-                writeln!(f, "      - {} : {}", var.name, var.dtype)?;
+        if let Some(implementation) = self.implementation.as_ref() {
+            if implementation.variables.is_empty() {
+                writeln!(f, "  - variables: (empty)")?;
+            } else {
+                writeln!(f, "  - variables:")?;
+                for var in implementation.variables.iter() {
+                    writeln!(f, "      - {} : {}", var.name, var.dtype)?;
+                }
             }
-        }
-
-        if let Some(im) = self.implementation.as_ref() {
+    
             writeln!(f, "  - implementation:")?;
-            let s = format!("{}", im);
+            let s = format!("{}", implementation.implementation);
             writeln!(f, "{}", indent(s, 8, true))?;
         } else {
             writeln!(f, "  - implementation: (none)")?;
         }
+
 
         Ok(())
     }

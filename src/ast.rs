@@ -66,6 +66,7 @@ pub struct ProgramDeclarations {
 #[derive(Clone)]
 pub enum DataType {
     One(String),
+    OneInternal(*mut llvm_sys::LLVMType),
     Array {
         item: Box<DataType>,
         from: i64,
@@ -84,9 +85,13 @@ pub struct StorageDeclarationNode {
 pub struct CallableDeclarationNode {
     pub name: String,
     pub param_types: Vec<DataType>,
-    pub variables: Vec<StorageDeclarationNode>,
     pub return_type: Option<DataType>,
-    pub implementation: Option<StatementBlockNode>,
+    pub implementation: Option<CallableImplementationNode>
+}
+
+pub struct CallableImplementationNode {
+    pub variables: Vec<StorageDeclarationNode>,
+    pub implementation: StatementBlockNode,
 }
 
 pub struct StatementBlockNode {

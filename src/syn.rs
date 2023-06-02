@@ -124,9 +124,13 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         let main_func = CallableDeclarationNode {
             name: "main".to_string(),
             param_types: Vec::new(),
-            variables: Vec::new(),
-            return_type: Some(DataType::One("integer".to_string())),
-            implementation: Some(main_block),
+            return_type: Some(
+                DataType::OneInternal(unsafe { llvm_sys::core::LLVMInt32Type() })
+            ),
+            implementation: Some(CallableImplementationNode{
+                variables: Vec::new(),
+                implementation: main_block,
+            }),
         };
         declarations.callables.push(main_func);
 
@@ -202,7 +206,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             name: name,
             param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
             return_type: Some(DataType::One(rettype)),
-            variables: Vec::new()
         })
     }
 
@@ -227,7 +230,6 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             name: name,
             param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
             return_type: None,
-            variables: Vec::new()
         })
     }
 
@@ -239,8 +241,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let vars = self.parse_maybe_variables_with_semicolon()?;
                 let implementation = self.parse_block()?;
                 
-                wip.variables = vars;
-                wip.implementation = Some(implementation);
+                wip.implementation = Some(CallableImplementationNode {
+                    implementation: implementation,
+                    variables: vars,
+                });
 
                 Ok(wip)
             },
