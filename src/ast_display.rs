@@ -194,10 +194,10 @@ impl fmt::Display for ast::ExpressionNode {
             ast::ExpressionNode::Call(call) => writeln!(f, "{}", call),
             ast::ExpressionNode::Literal(lit) => writeln!(f, "literal {}", lit),
             ast::ExpressionNode::Access(access) => writeln!(f, "access store {}", access),
-            ast::ExpressionNode::ArrayAccess { array, index } => {
+            ast::ExpressionNode::ArrayAccess(node) => {
                 writeln!(f, "A [ B ]")?;
-                writeln!(f, "{}", indent(format!("A: {}", array), 4, true))?;
-                writeln!(f, "{}", indent(format!("B: {}", index), 4, true))?;
+                writeln!(f, "{}", indent(format!("A: {}", node.array), 4, true))?;
+                writeln!(f, "{}", indent(format!("B: {}", node.index), 4, true))?;
                 Ok(())
             },
             ast::ExpressionNode::BinOp(binop) => {

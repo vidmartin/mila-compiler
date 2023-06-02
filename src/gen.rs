@@ -1,6 +1,6 @@
 
 use llvm_sys as llvm;
-use crate::ast::{self, LiteralNode, CallableDeclarationNode, CallableImplementationNode, StatementNode, StatementBlockNode, AssignmentNode, ExpressionNode, ForLoopNode, WhileLoopNode, IfStatementNode};
+use crate::ast;
 
 #[derive(Debug)]
 pub enum GenError {
@@ -12,7 +12,8 @@ pub enum GenError {
     TypeMismatch,
     UndefinedSymbol(String),
     InvalidScope,
-    InvalidEncoding
+    InvalidEncoding,
+    InvalidMacroUsage,
 }
 
 pub struct LlvmTypes {
@@ -142,11 +143,11 @@ impl Drop for GenContext {
     }
 }
 
-pub trait CodeGen {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError>;
+pub trait CodeGen<T> {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<T, GenError>;
 }
 
-impl CodeGen for ast::ProgramNode {
+impl CodeGen<()> for ast::ProgramNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         if scope.is_some() {
             return Err(GenError::InvalidScope);
@@ -187,7 +188,7 @@ impl CodeGen for ast::ProgramNode {
                     match dtype.as_str() {
                         "integer" => unsafe {
                             let value = match constant.init {
-                                Some(LiteralNode::Integer(i)) => i,
+                                Some(ast::LiteralNode::Integer(i)) => i,
                                 _ => return Err(GenError::TypeMismatch),
                             };
 
@@ -218,7 +219,7 @@ impl CodeGen for ast::ProgramNode {
     }
 }
 
-impl CodeGen for CallableDeclarationNode {
+impl CodeGen<()> for ast::CallableDeclarationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let scope = scope.ok_or(GenError::InvalidScope)?;
         if scope.callable_context.is_some() {
@@ -269,7 +270,7 @@ impl CodeGen for CallableDeclarationNode {
                     let vref = llvm::core::LLVMBuildAlloca(
                         ctx.builder,
                         ctx.types.get_type(Some(&ret_type))?,
-                        b"0\0".as_ptr() as *const i8
+                        b"\0".as_ptr() as *const i8
                     );
                     
                     inner_scope.callable_context = Some(CallableContext {
@@ -283,7 +284,7 @@ impl CodeGen for CallableDeclarationNode {
                         return_store: None
                     });
                 }
-                
+
                 // generate code
                 implementation.gen(ctx, Some(&mut inner_scope))?;
             }
@@ -293,7 +294,7 @@ impl CodeGen for CallableDeclarationNode {
     }
 }
 
-impl CodeGen for CallableImplementationNode {
+impl CodeGen<()> for ast::CallableImplementationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let scope = scope.ok_or(GenError::InvalidScope)?;
 
@@ -315,16 +316,16 @@ impl CodeGen for CallableImplementationNode {
     }
 }
 
-impl CodeGen for StatementNode {
+impl CodeGen<()> for ast::StatementNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         match self {
-            StatementNode::StatementBlock(node) => node.gen(ctx, scope),
-            StatementNode::Assignment(node) => node.gen(ctx, scope),
-            StatementNode::Expression(node) => node.gen(ctx, scope),
-            StatementNode::ForLoop(node) => node.gen(ctx, scope),
-            StatementNode::WhileLoop(node) => node.gen(ctx, scope),
-            StatementNode::IfStatement(node) => node.gen(ctx, scope),
-            StatementNode::Exit => {
+            ast::StatementNode::StatementBlock(node) => node.gen(ctx, scope),
+            ast::StatementNode::Assignment(node) => node.gen(ctx, scope),
+            ast::StatementNode::Expression(node) => node.gen(ctx, scope).map(|_| ()),
+            ast::StatementNode::ForLoop(node) => node.gen(ctx, scope),
+            ast::StatementNode::WhileLoop(node) => node.gen(ctx, scope),
+            ast::StatementNode::IfStatement(node) => node.gen(ctx, scope),
+            ast::StatementNode::Exit => {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
                 let call_ctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
                 unsafe {
@@ -340,7 +341,7 @@ impl CodeGen for StatementNode {
     }
 }
 
-impl CodeGen for StatementBlockNode {
+impl CodeGen<()> for ast::StatementBlockNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let mut scope = scope.ok_or(GenError::InvalidScope)?;
 
@@ -352,31 +353,88 @@ impl CodeGen for StatementBlockNode {
     }
 }
 
-impl CodeGen for AssignmentNode {
+impl CodeGen<()> for ast::AssignmentNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         todo!()
     }
 }
 
-impl CodeGen for ExpressionNode {
+impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+        match self {
+            ast::ExpressionNode::Call(node) => todo!(),
+            ast::ExpressionNode::Literal(node) => todo!(),
+            ast::ExpressionNode::Access(node) => todo!(),
+            ast::ExpressionNode::ArrayAccess(node) => todo!(),
+            ast::ExpressionNode::BinOp(node) => todo!(),
+        }
+    }
+}
+
+fn gen_write(pseudocall: ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
+    if pseudocall.params.len() != 1 {
+        return Err(GenError::InvalidMacroUsage);
+    }
+
+    if let ast::ExpressionNode::Literal(ast::LiteralNode::String(msg)) = &pseudocall.params[0] {
+        // special case for string literal
+        unsafe {
+            let cstr = std::ffi::CString::new(msg.clone()).map_err(|_| GenError::InvalidEncoding)?;
+            let strlitval = llvm::core::LLVMConstString(cstr.as_ptr(), msg.len() as u32, 0);
+            // WIP
+        }
+    }
+
+    todo!()
+}
+
+impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+        let scope = scope.ok_or(GenError::InvalidScope)?;
+
+        // built-in macros:
+        match self.callable_name.as_str() {
+            "dec" => todo!(),
+            "inc" => todo!(),
+            "writeln" => todo!(),
+            "write" => todo!(),
+            "readln" => todo!(),
+            _ => {},
+        }
+
+        let mut params = self.params.iter().map(
+            |par| par.gen(ctx, Some(scope))
+        ).collect::<Result<Vec<*mut llvm::LLVMValue>, GenError>>()?;
+
+        unsafe {
+            // if not a macro, it's a normal function call.
+            let retval = llvm::core::LLVMBuildCall2(
+                ctx.builder,
+                std::ptr::null_mut(), // should be function signature, I'm trying what happens if I omit it
+                scope.get(&self.callable_name).ok_or(GenError::UndefinedSymbol(self.callable_name.clone()))?,
+                params.as_mut_ptr(),
+                params.len() as u32,
+                b"\0".as_ptr() as *const i8
+            );
+
+            return Ok(retval);
+        }   
+    }
+}
+
+impl CodeGen<()> for ast::ForLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         todo!()
     }
 }
 
-impl CodeGen for ForLoopNode {
+impl CodeGen<()> for ast::WhileLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         todo!()
     }
 }
 
-impl CodeGen for WhileLoopNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        todo!()
-    }
-}
-
-impl CodeGen for IfStatementNode {
+impl CodeGen<()> for ast::IfStatementNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         todo!()
     }

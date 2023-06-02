@@ -32,7 +32,7 @@ pub enum ExpressionNode {
     Call(CallNode),
     Literal(LiteralNode),
     Access(String),
-    ArrayAccess { array: Box<ExpressionNode>, index: Box<ExpressionNode> },
+    ArrayAccess(ArrayAccessNode),
     BinOp(BinaryOperator),
 }
 
@@ -40,6 +40,11 @@ pub struct BinaryOperator {
     pub op: Token,
     pub lhs: Option<Box<ExpressionNode>>,
     pub rhs: Option<Box<ExpressionNode>>,
+}
+
+pub struct ArrayAccessNode {
+    pub array: Box<ExpressionNode>,
+    pub index: Box<ExpressionNode>,
 }
 
 pub enum LiteralNode {

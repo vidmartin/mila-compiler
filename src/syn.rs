@@ -26,11 +26,11 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
     }
 
     fn debug_print(&mut self, s: &str) {
-        if let Some(tok) = self.peek() {
-            println!("{}, {}", s, tok);
-        } else {
-            println!("{}, end of file", s);
-        }
+        // if let Some(tok) = self.peek() {
+        //     println!("{}, {}", s, tok);
+        // } else {
+        //     println!("{}, end of file", s);
+        // }
     }
 
     fn peek(&mut self) -> Option<&Token> {
@@ -1038,10 +1038,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::TkSqOpen)?;
                 let expr = self.parse_e0()?;
                 self.expect_token(&Token::TkSqClose)?;
-                Ok(self.parse_more_e7(ExpressionNode::ArrayAccess {
+                Ok(self.parse_more_e7(ExpressionNode::ArrayAccess(ArrayAccessNode {
                     array: Box::new(lhs),
                     index: Box::new(expr),
-                })?)
+                }))?)
             },
             Some(
                 Token::TkParClose |
