@@ -1,14 +1,16 @@
 
 use llvm_sys as llvm;
-use crate::ast::{self, LiteralNode};
+use crate::ast::{self, LiteralNode, CallableDeclarationNode, CallableImplementationNode, StatementNode, StatementBlockNode};
 
 pub enum GenError {
     MissingModule,
     InvalidContext,
-    InvalidString,
+    InvalidName,
     InvalidDataType,
     NameConflict,
     TypeMismatch,
+    UndefinedSymbol(String),
+    InvalidScope,
 }
 
 pub struct LlvmTypes {
@@ -43,9 +45,14 @@ impl LlvmTypes {
     }
 }
 
+pub struct CallableContext {
+    return_store: Option<*mut llvm::LLVMValue>,
+}
+
 pub struct Scope<'a> {
     map: std::collections::HashMap<String, *mut llvm::LLVMValue>,
     parent: Option<&'a Scope<'a>>,
+    callable_context: Option<CallableContext>,
 }
 
 impl<'a> Scope<'a> {
@@ -53,6 +60,7 @@ impl<'a> Scope<'a> {
         Self {
             map: std::collections::HashMap::new(),
             parent: None,
+            callable_context: None,
         }
     }
 
@@ -124,25 +132,33 @@ impl Drop for GenContext {
 }
 
 pub trait CodeGen {
-    fn gen(&self, ctx: &mut GenContext) -> Result<(), GenError>;
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError>;
 }
 
 impl CodeGen for ast::ASTNode {
-    fn gen(&self, ctx: &mut GenContext) -> Result<(), GenError> {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        if scope.is_some() {
+            return Err(GenError::InvalidScope);
+        }
+
         match self {
-            ast::ASTNode::Program(program) => program.gen(ctx),
+            ast::ASTNode::Program(program) => program.gen(ctx, None),
         }
     }
 }
 
 impl CodeGen for ast::ProgramNode {
-    fn gen(&self, ctx: &mut GenContext) -> Result<(), GenError> {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        if scope.is_some() {
+            return Err(GenError::InvalidScope);
+        }
+
         if ctx.get_module().is_ok() {
             // assert that module is not defined yet
             return Err(GenError::InvalidContext);
         }
 
-        let name_cstr = std::ffi::CString::new(self.name.as_str()).map_err(|_| GenError::InvalidString)?;
+        let name_cstr = std::ffi::CString::new(self.name.as_str()).map_err(|_| GenError::InvalidName)?;
         ctx.module = unsafe {
             llvm::core::LLVMModuleCreateWithName(name_cstr.as_ptr())
         };
@@ -151,12 +167,13 @@ impl CodeGen for ast::ProgramNode {
 
         for variable in self.declarations.variables.iter() {
             // TODO: arrays
+            // TODO: default values?
 
             let llvm_type = ctx.types.get_type(Some(&variable.dtype))?;
 
             let cstr = std::ffi::CString::new(
                 variable.name.as_str()
-            ).map_err(|_| GenError::InvalidString)?;
+            ).map_err(|_| GenError::InvalidName)?;
 
             unsafe {
                 let gvref = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
@@ -193,27 +210,145 @@ impl CodeGen for ast::ProgramNode {
             }
         }
 
+    
         for callable in self.declarations.callables.iter() {
-            // TODO: forward refs
+            callable.gen(ctx, Some(&mut global_scope))?;
+        }
 
-            let cstr = std::ffi::CString::new(
-                callable.name.clone()
-            ).map_err(|_| GenError::InvalidString)?;
+        return Ok(());
+    }
+}
 
-            let return_type = ctx.types.get_type(callable.return_type.as_ref())?;
-            let mut param_types = callable.param_types.iter().map(
+impl CodeGen for CallableDeclarationNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        let scope = scope.ok_or(GenError::InvalidScope)?;
+        if scope.callable_context.is_some() {
+            return Err(GenError::InvalidScope);
+        }
+
+        if scope.get(&self.name).is_none() {
+            // function with this name not declared yet, so we declare it
+
+            let cstr = std::ffi::CString::new(self.name.clone()).map_err(|_| GenError::InvalidName)?;
+
+            let return_type = ctx.types.get_type(self.return_type.as_ref())?;
+            let mut param_types = self.param_types.iter().map(
                 |ptype| ctx.types.get_type(Some(ptype))
             ).collect::<Result<Vec<*mut llvm::LLVMType>, GenError>>()?;
 
             unsafe {
                 let fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
                 let fn_ref = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), fn_type);
-                global_scope.set(&callable.name, fn_ref)?;
+                scope.set(&self.name, fn_ref)?;
             }
-
-            // llvm::core::LLVMBuildAlloca(arg1, Ty, Name)
         }
 
-        todo!()
+        if let Some(implementation) = self.implementation.as_ref() {
+            // here we generate implementation for the function
+            // TODO: check that implementation for this function hasn't been generated yet
+            // TODO: check that the function signature matches
+
+            let function = scope.get(&self.name).ok_or(
+                GenError::UndefinedSymbol(self.name.clone())
+            )?;
+
+            let mut inner_scope = scope.sub();
+
+            unsafe {
+                let bb = llvm::core::LLVMAppendBasicBlockInContext(
+                    ctx.llvm_ctx,
+                    function,
+                    b"\0".as_ptr() as *const i8
+                );
+
+                llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
+
+                // create callable context (e.g. register storage for return value and pass it to implementation)
+                if let Some(ret_type) = self.return_type {
+                    // when this is a funcion, allocate space for return value
+
+                    let vref = llvm::core::LLVMBuildAlloca(
+                        ctx.builder,
+                        ctx.types.get_type(Some(&ret_type))?,
+                        b"0\0".as_ptr() as *const i8
+                    );
+                    
+                    inner_scope.callable_context = Some(CallableContext {
+                        return_store: Some(vref)
+                    });
+                } else {
+                    // when this is a function, let the return value be void
+                    // TODO: test if this works
+
+                    inner_scope.callable_context = Some(CallableContext {
+                        return_store: None
+                    });
+                }
+                
+                // generate code
+                implementation.gen(ctx, Some(&mut inner_scope))?;
+            }
+        }
+
+        return Ok(());
+    }
+}
+
+impl CodeGen for CallableImplementationNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        let scope = scope.ok_or(GenError::InvalidScope)?;
+
+        unsafe {
+            // allocate local variables
+            for local in self.variables.iter() {
+                let cstr = std::ffi::CString::new(local.name.clone()).map_err(|_| GenError::InvalidName)?;
+                let dtype = ctx.types.get_type(Some(&local.dtype))?;
+
+                let vref = llvm::core::LLVMBuildAlloca(ctx.builder, dtype, cstr.as_ptr());
+                scope.set(&local.name, vref)?;
+            }
+        }
+
+        // generate code
+        self.implementation.gen(ctx, Some(scope))?;
+
+        return Ok(());
+    }
+}
+
+impl CodeGen for StatementNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        match self {
+            StatementNode::StatementBlock(node) => node.gen(ctx, scope),
+            StatementNode::Assignment(node) => node.gen(ctx, scope),
+            StatementNode::Expression(node) => node.gen(ctx, scope),
+            StatementNode::ForLoop(node) => node.gen(ctx, scope),
+            StatementNode::WhileLoop(node) => node.gen(ctx, scope),
+            StatementNode::IfStatement(node) => node.gen(ctx, scope),
+            StatementNode::Exit => {
+                let scope = scope.ok_or(GenError::InvalidScope)?;
+                let call_ctx = scope.callable_context.ok_or(GenError::InvalidScope)?;
+                unsafe {
+                    if let Some(retval) = call_ctx.return_store {
+                        llvm::core::LLVMBuildRet(ctx.builder, retval);
+                    } else {
+                        llvm::core::LLVMBuildRetVoid(ctx.builder);
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl CodeGen for StatementBlockNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        let mut scope = scope.ok_or(GenError::InvalidScope)?;
+
+        for stmt in self.statements.iter() {
+            stmt.gen(ctx, Some(&mut scope))?;
+        }
+
+        return Ok(());
     }
 }
