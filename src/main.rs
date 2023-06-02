@@ -7,11 +7,12 @@ mod syn;
 mod gen;
 mod args;
 
-use core::num::dec2flt::parse;
 use std::io::{stdin, Read};
 use clap::Parser;
 
 use llvm_sys;
+
+use crate::gen::CodeGen;
 
 fn llvm_test() {
     unsafe {
@@ -88,18 +89,22 @@ fn main() {
             let mut lexer = lex::Lexer::new(s.as_str().chars()).peekable();
             let mut parser = syn::Parser::new(&mut lexer);
 
-            let ast = match parser.parse_program() {
+            let program_ast = match parser.parse_program() {
                 Ok(ast) => ast,
                 Err(err) => panic!("lex or parse error! {:?}", err),
             };
 
             if let args::OutputMode::Ast = args.output_mode {
                 // print output from parser
-                println!("{}", ast_display::indent(format!("{}", ast::ASTNode::Program(ast)), 4, false));
+                println!("{}", ast_display::indent(format!("{}", program_ast), 4, false));
             } else {
                 // generate LLVM IR
-                let context = gen::GenContext::new();
-                ast
+                let mut context = gen::GenContext::new();
+
+                match program_ast.gen(&mut context, None).and_then(|_| context.get_string()) {
+                    Ok(llvm_ir) => println!("{}", llvm_ir),
+                    Err(err) => panic!("gen error! {:?}", err),
+                }
             }
         },
     }

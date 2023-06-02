@@ -2,6 +2,7 @@
 use llvm_sys as llvm;
 use crate::ast::{self, LiteralNode, CallableDeclarationNode, CallableImplementationNode, StatementNode, StatementBlockNode, AssignmentNode, ExpressionNode, ForLoopNode, WhileLoopNode, IfStatementNode};
 
+#[derive(Debug)]
 pub enum GenError {
     MissingModule,
     InvalidContext,
@@ -143,18 +144,6 @@ impl Drop for GenContext {
 
 pub trait CodeGen {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError>;
-}
-
-impl CodeGen for ast::ASTNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        if scope.is_some() {
-            return Err(GenError::InvalidScope);
-        }
-
-        match self {
-            ast::ASTNode::Program(program) => program.gen(ctx, None),
-        }
-    }
 }
 
 impl CodeGen for ast::ProgramNode {

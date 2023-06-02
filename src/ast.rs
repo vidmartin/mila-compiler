@@ -1,10 +1,6 @@
 
 use crate::tokens::Token;
 
-pub enum ASTNode {
-    Program(ProgramNode),
-}
-
 pub enum StatementNode {
     StatementBlock(StatementBlockNode),
     Assignment(AssignmentNode),

@@ -13,33 +13,29 @@ pub fn indent(mut s: String, d: usize, dash: bool) -> String {
     return s;
 }
 
-impl fmt::Display for ast::ASTNode {
+impl fmt::Display for ast::ProgramNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ast::ASTNode::Program(program_node) => {
-                writeln!(f, "ASTNode::Program {}", program_node.name)?;
-                
-                writeln!(f, "{}", if program_node.declarations.constants.is_empty() { "  - constants: (empty)" } else { "  - constants:" })?;
-                for constant in program_node.declarations.constants.iter() {
-                    let s = format!("{}", constant);
-                    writeln!(f, "{}", indent(s, 8, true))?;
-                }
-
-                writeln!(f, "{}", if program_node.declarations.variables.is_empty() { "  - variables: (empty)" } else { "  - variables:" })?;
-                for variable in program_node.declarations.variables.iter() {
-                    let s = format!("{}", variable);
-                    writeln!(f, "{}", indent(s, 8, true))?;
-                }
-
-                writeln!(f, "{}", if program_node.declarations.callables.is_empty() { "  - callables: (empty)" } else { "  - callables:" })?;
-                for callable in program_node.declarations.callables.iter() {
-                    let s = format!("{}", callable);
-                    writeln!(f, "{}", indent(s, 8, true))?;
-                }
-
-                Ok(())
-            },
+        writeln!(f, "program {}", self.name)?;
+        
+        writeln!(f, "{}", if self.declarations.constants.is_empty() { "  - constants: (empty)" } else { "  - constants:" })?;
+        for constant in self.declarations.constants.iter() {
+            let s = format!("{}", constant);
+            writeln!(f, "{}", indent(s, 8, true))?;
         }
+
+        writeln!(f, "{}", if self.declarations.variables.is_empty() { "  - variables: (empty)" } else { "  - variables:" })?;
+        for variable in self.declarations.variables.iter() {
+            let s = format!("{}", variable);
+            writeln!(f, "{}", indent(s, 8, true))?;
+        }
+
+        writeln!(f, "{}", if self.declarations.callables.is_empty() { "  - callables: (empty)" } else { "  - callables:" })?;
+        for callable in self.declarations.callables.iter() {
+            let s = format!("{}", callable);
+            writeln!(f, "{}", indent(s, 8, true))?;
+        }
+
+        Ok(())
     }
 }
 
