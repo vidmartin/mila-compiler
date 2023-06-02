@@ -11,6 +11,7 @@ pub enum GenError {
     TypeMismatch,
     UndefinedSymbol(String),
     InvalidScope,
+    InvalidEncoding
 }
 
 pub struct LlvmTypes {
@@ -118,6 +119,15 @@ impl GenContext {
         }
 
         return Ok(self.module);
+    }
+
+    pub fn get_string(&self) -> Result<String, GenError> {
+        unsafe {
+            let cstr = llvm::core::LLVMPrintModuleToString(self.get_module()?);
+            let rstring = std::ffi::CStr::from_ptr(cstr).to_str().map_err(|_| GenError::InvalidEncoding)?.to_owned();
+            llvm::core::LLVMDisposeMessage(cstr);
+            return Ok(rstring);
+        }
     }
 }
 

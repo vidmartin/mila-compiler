@@ -5,8 +5,11 @@ mod ast;
 mod ast_display;
 mod syn;
 mod gen;
+mod args;
 
+use core::num::dec2flt::parse;
 use std::io::{stdin, Read};
+use clap::Parser;
 
 use llvm_sys;
 
@@ -60,32 +63,53 @@ fn llvm_test() {
 }
 
 fn main() {
+    let args = args::Args::parse();
+
+    // read input (stdin)
     let mut s = String::new();
     stdin().read_to_string(&mut s).unwrap();
     if s.chars().last().unwrap() != '\n' {
         s.push('\n');
     }
 
-    let mut lexer = lex::Lexer::new(s.as_str().chars());
-    println!("LEX OUTPUT:");
-    while let Some(tok) = lexer.next() {
-        println!("    {}", tok);
-    }
+    match args.output_mode {
+        args::OutputMode::Lex => {
+            // print output from lexer
 
-    if let Some(err) = lexer.get_error() {
-        println!("lex error! {}", err);
-        return;
+            let mut lexer = lex::Lexer::new(s.as_str().chars());
+            while let Some(tok) = lexer.next() {
+                println!("{}", tok);
+            }
+            if let Some(err) = lexer.get_error() {
+                panic!("lex error! {}", err);
+            }
+        },
+        args::OutputMode::Ast | args::OutputMode::Gen => {
+            let mut lexer = lex::Lexer::new(s.as_str().chars()).peekable();
+            let mut parser = syn::Parser::new(&mut lexer);
+
+            let ast = match parser.parse_program() {
+                Ok(ast) => ast,
+                Err(err) => panic!("lex or parse error! {:?}", err),
+            };
+
+            if let args::OutputMode::Ast = args.output_mode {
+                // print output from parser
+                println!("{}", ast_display::indent(format!("{}", ast::ASTNode::Program(ast)), 4, false));
+            } else {
+                // generate LLVM IR
+                let context = gen::GenContext::new();
+                ast
+            }
+        },
     }
 
     println!();
-    let mut lexer = lex::Lexer::new(s.as_str().chars()).peekable();
-    let mut parser = syn::Parser::new(&mut lexer);
-    let parse_result = parser.parse_program();
+    
+    
+    
     println!("PARSE OUTPUT:");
 
-    match parse_result {
-        Ok(node) => println!("{}", ast_display::indent(format!("{}", ast::ASTNode::Program(node)), 4, false)),
-        Err(err) => println!("{:?}", err),
-    }
+
 
 }
