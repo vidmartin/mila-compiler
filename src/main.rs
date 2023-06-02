@@ -4,6 +4,7 @@ mod lex;
 mod ast;
 mod ast_display;
 mod syn;
+mod gen;
 
 use std::io::{stdin, Read};
 
