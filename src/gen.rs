@@ -1,6 +1,6 @@
 
 use llvm_sys as llvm;
-use crate::ast::{self, LiteralNode, CallableDeclarationNode, CallableImplementationNode, StatementNode, StatementBlockNode};
+use crate::ast::{self, LiteralNode, CallableDeclarationNode, CallableImplementationNode, StatementNode, StatementBlockNode, AssignmentNode, ExpressionNode, ForLoopNode, WhileLoopNode, IfStatementNode};
 
 pub enum GenError {
     MissingModule,
@@ -264,7 +264,7 @@ impl CodeGen for CallableDeclarationNode {
                 llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
 
                 // create callable context (e.g. register storage for return value and pass it to implementation)
-                if let Some(ret_type) = self.return_type {
+                if let Some(ret_type) = self.return_type.as_ref() {
                     // when this is a funcion, allocate space for return value
 
                     let vref = llvm::core::LLVMBuildAlloca(
@@ -327,7 +327,7 @@ impl CodeGen for StatementNode {
             StatementNode::IfStatement(node) => node.gen(ctx, scope),
             StatementNode::Exit => {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
-                let call_ctx = scope.callable_context.ok_or(GenError::InvalidScope)?;
+                let call_ctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
                 unsafe {
                     if let Some(retval) = call_ctx.return_store {
                         llvm::core::LLVMBuildRet(ctx.builder, retval);
@@ -350,5 +350,35 @@ impl CodeGen for StatementBlockNode {
         }
 
         return Ok(());
+    }
+}
+
+impl CodeGen for AssignmentNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        todo!()
+    }
+}
+
+impl CodeGen for ExpressionNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        todo!()
+    }
+}
+
+impl CodeGen for ForLoopNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        todo!()
+    }
+}
+
+impl CodeGen for WhileLoopNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        todo!()
+    }
+}
+
+impl CodeGen for IfStatementNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+        todo!()
     }
 }
