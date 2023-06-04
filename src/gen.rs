@@ -87,7 +87,7 @@ pub fn gen_printf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
 }
 
 pub struct CallableContext {
-    return_store: Option<*mut llvm::LLVMValue>,
+    return_store: Option<TypedSymbol>,
 }
 
 #[derive(Clone)]
@@ -339,14 +339,18 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 if let Some(ret_type) = self.return_type.as_ref() {
                     // when this is a funcion, allocate space for return value
 
-                    let vref = llvm::core::LLVMBuildAlloca(
+                    let llvm_type = ctx.types.get_type(Some(&ret_type))?;
+                    let llvm_value = llvm::core::LLVMBuildAlloca(
                         ctx.builder,
-                        ctx.types.get_type(Some(&ret_type))?,
+                        llvm_type,
                         b"\0".as_ptr() as *const i8
                     );
                     
                     inner_scope.callable_context = Some(CallableContext {
-                        return_store: Some(vref)
+                        return_store: Some(TypedSymbol {
+                            llvm_value: llvm_value,
+                            llvm_type: llvm_type,
+                        })
                     });
                 } else {
                     // when this is a function, let the return value be void
@@ -359,6 +363,10 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
                 // generate code
                 implementation.gen(ctx, Some(&mut inner_scope))?;
+
+                // virtual exit at the end of basic block
+                llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb); // ensure we're still at the correct basic block
+                ast::StatementNode::Exit.gen(ctx, Some(&mut inner_scope))?; // kind of hacky but whatever
             }
         }
 
@@ -406,8 +414,14 @@ impl CodeGen<()> for ast::StatementNode {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
                 let call_ctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
                 unsafe {
-                    if let Some(retval) = call_ctx.return_store {
-                        llvm::core::LLVMBuildRet(ctx.builder, retval);
+                    if let Some(llvm_return_store) = call_ctx.return_store.clone() {
+                        let llvm_return_value = llvm::core::LLVMBuildLoad2(
+                            ctx.builder,
+                            llvm_return_store.llvm_type, // this is the type of the value, not the pointer to it
+                            llvm_return_store.llvm_value, // this is the pointer to it (this is only true for return_store)
+                            b"\0".as_ptr() as *const i8
+                        );
+                        llvm::core::LLVMBuildRet(ctx.builder, llvm_return_value);
                     } else {
                         llvm::core::LLVMBuildRetVoid(ctx.builder);
                     }
@@ -463,12 +477,17 @@ fn gen_write(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope
         let msglen = msg.len();
         unsafe {
             let cstr = std::ffi::CString::new(msg).map_err(|_| GenError::InvalidEncoding)?;
-            let mut strlitval = llvm::core::LLVMConstString(cstr.as_ptr(), msglen as u32, 0);
+            let mut llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), msglen as u32, 0);
+            let mut llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
+            let mut llvm_string_pointer_type = llvm::core::LLVMPointerType(llvm_string_type, 0);
+            let mut storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, b"\0".as_ptr() as *const i8);
+            llvm::core::LLVMSetInitializer(storage, llvm_string_literal);
+            llvm::core::LLVMSetGlobalConstant(storage, 1);
             llvm::core::LLVMBuildCall2(
                 ctx.builder,
                 printf.llvm_type,
                 printf.llvm_value,
-                (&mut strlitval) as *mut *mut llvm::LLVMValue,
+                (&mut storage) as *mut *mut llvm::LLVMValue,
                 1,
                 b"\0".as_ptr() as *const i8
             );
