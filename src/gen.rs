@@ -477,9 +477,8 @@ fn gen_write(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope
         let msglen = msg.len();
         unsafe {
             let cstr = std::ffi::CString::new(msg).map_err(|_| GenError::InvalidEncoding)?;
-            let mut llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), msglen as u32, 0);
-            let mut llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
-            let mut llvm_string_pointer_type = llvm::core::LLVMPointerType(llvm_string_type, 0);
+            let llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), msglen as u32, 0);
+            let llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
             let mut storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, b"\0".as_ptr() as *const i8);
             llvm::core::LLVMSetInitializer(storage, llvm_string_literal);
             llvm::core::LLVMSetGlobalConstant(storage, 1);
