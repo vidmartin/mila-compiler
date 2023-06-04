@@ -123,7 +123,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         let main_block = self.parse_block()?;
         let main_func = CallableDeclarationNode {
             name: "main".to_string(),
-            param_types: Vec::new(),
+            params: Vec::new(),
             return_type: Some(
                 DataType::OneInternal(unsafe { llvm_sys::core::LLVMInt32Type() })
             ),
@@ -204,7 +204,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(CallableDeclarationNode {
             implementation: None,
             name: name,
-            param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
+            params: params,
             return_type: Some(DataType::One(rettype)),
         })
     }
@@ -228,7 +228,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(CallableDeclarationNode {
             implementation: None,
             name: name,
-            param_types: params.into_iter().map(|(_name, dtype)| dtype).collect(),
+            params: params,
             return_type: None,
         })
     }

@@ -25,6 +25,7 @@ pub struct LlvmTypes {
     i32: *mut llvm::LLVMType,
     i16: *mut llvm::LLVMType,
     i8: *mut llvm::LLVMType,
+    i1: *mut llvm::LLVMType,
     void: *mut llvm::LLVMType,
 }
 
@@ -36,6 +37,7 @@ impl LlvmTypes {
                 i32: llvm_sys::core::LLVMInt32TypeInContext(ctx),
                 i16: llvm_sys::core::LLVMInt16TypeInContext(ctx),
                 i8: llvm_sys::core::LLVMInt8TypeInContext(ctx),
+                i1: llvm_sys::core::LLVMInt1TypeInContext(ctx),
                 void: llvm_sys::core::LLVMVoidTypeInContext(ctx),
             }
         }
@@ -57,19 +59,22 @@ impl LlvmTypes {
 }
 
 #[derive(Clone)]
-pub struct CFunctions {
+pub struct BuiltInFunctions {
+    // C standard library:
     printf: Option<TypedSymbol>,
-    fgets: Option<TypedSymbol>,
-    strtol: Option<TypedSymbol>,
+    scanf: Option<TypedSymbol>,
+
+    // hard-coded implementations:
+    readln: Option<TypedSymbol>,
 }
 
-const C_FUNCTIONS_DEFAULT: CFunctions = CFunctions {
+const C_FUNCTIONS_DEFAULT: BuiltInFunctions = BuiltInFunctions {
     printf: None,
-    fgets: None,
-    strtol: None,
+    scanf: None,
+    readln: None,
 };
 
-impl CFunctions {
+impl BuiltInFunctions {
     pub fn new() -> Self {
         C_FUNCTIONS_DEFAULT.clone()
     }
@@ -87,8 +92,71 @@ pub fn gen_printf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
     }
 }
 
+pub fn gen_scanf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
+    unsafe {
+        let mut i8ptr = llvm::core::LLVMPointerType(ctx.types.i8, 0); // address space = 0 should be default
+        let llvm_fn_type = llvm::core::LLVMFunctionType(ctx.types.i32, (&mut i8ptr) as *mut *mut llvm::LLVMType, 1, 1);
+        let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"scanf\0".as_ptr() as *const i8, llvm_fn_type);
+        return Ok(TypedSymbol {
+            llvm_type: llvm_fn_type,
+            llvm_value: llvm_fn_value,
+        });
+    }
+}
+
+pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymbol, GenError> {
+    // hard coded implementation for readln functionality
+
+    unsafe {
+        let mut i64ptr = llvm::core::LLVMPointerType(ctx.types.i64, 0);
+        let llvm_readln_fn_type = llvm::core::LLVMFunctionType(ctx.types.i64, (&mut i64ptr) as *mut *mut llvm::LLVMType, 1, 1);
+        let llvm_readln_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"readln\0".as_ptr() as *const i8, llvm_readln_fn_type);
+        
+        let bb = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, b"\0".as_ptr() as *const i8);
+        llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
+
+        let llvm_ptr = llvm::core::LLVMGetParam(llvm_readln_fn_value, 0);
+        
+        let mut scanf_params = vec![fetch_string_literal(ctx, "%ld")?, llvm_ptr];
+
+        let llvm_scanf_retval = llvm::core::LLVMBuildCall2(
+            ctx.builder,
+            scanf.llvm_type,
+            scanf.llvm_value,
+            scanf_params.as_mut_ptr(),
+            scanf_params.len() as u32,
+            b"\0".as_ptr() as *const i8
+        );
+
+        let llvm_ge0_val = llvm::core::LLVMBuildICmp(
+            ctx.builder,
+            llvm::LLVMIntPredicate::LLVMIntSGE,
+            llvm_scanf_retval,
+            llvm::core::LLVMConstInt(ctx.types.i32, 0 as u64, 0),
+            b"\0".as_ptr() as *const i8
+        );
+
+        let llvm_cast = llvm::core::LLVMBuildIntCast2(
+            ctx.builder, llvm_ge0_val,
+            ctx.types.i64,
+            1,
+            b"\0".as_ptr() as *const i8
+        );
+
+        llvm::core::LLVMBuildRet(ctx.builder, llvm_cast);
+
+        Ok(TypedSymbol {
+            llvm_type: llvm_readln_fn_type,
+            llvm_value: llvm_readln_fn_value,
+        })
+    }
+}
+
 pub struct CallableContext {
+    callable_name: String,
+    callable: TypedSymbol,
     return_store: Option<TypedSymbol>,
+    params: Vec<(String, *mut llvm::LLVMType)>,
 }
 
 #[derive(Clone)]
@@ -101,7 +169,7 @@ pub struct Scope<'a> {
     map: std::collections::HashMap<String, TypedSymbol>,
     parent: Option<&'a Scope<'a>>,
     callable_context: Option<CallableContext>,
-    c_functions: &'a CFunctions,
+    c_functions: &'a BuiltInFunctions,
 }
 
 impl<'a> Scope<'a> {
@@ -213,8 +281,10 @@ impl CodeGen<()> for ast::ProgramNode {
             llvm::core::LLVMModuleCreateWithNameInContext(name_cstr.as_ptr(), ctx.llvm_ctx)
         };
 
-        let mut c_functions = CFunctions::new();
+        let mut c_functions = BuiltInFunctions::new();
         c_functions.printf = Some(gen_printf(ctx)?);
+        c_functions.scanf = Some(gen_scanf(ctx)?);
+        c_functions.readln = Some(gen_readln(ctx, c_functions.scanf.as_ref().unwrap())?);
 
         let mut global_scope = Scope::new();
         global_scope.c_functions = &c_functions;
@@ -292,14 +362,14 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
             return Err(GenError::InvalidScope);
         }
 
-        if scope.get(&self.name).is_none() {
+        let my_symbol = if scope.get(&self.name).is_none() {
             // function with this name not declared yet, so we declare it
 
             let cstr = std::ffi::CString::new(self.name.clone()).map_err(|_| GenError::InvalidName)?;
 
             let return_type = ctx.types.get_type(self.return_type.as_ref())?;
-            let mut param_types = self.param_types.iter().map(
-                |ptype| ctx.types.get_type(Some(ptype))
+            let mut param_types = self.params.iter().map(
+                |(_pname, ptype)| ctx.types.get_type(Some(ptype))
             ).collect::<Result<Vec<*mut llvm::LLVMType>, GenError>>()?;
 
             unsafe {
@@ -308,15 +378,16 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
                 let llvm_fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
                 let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), llvm_fn_type);
-                scope.set(
-                    &self.name,
-                    TypedSymbol {
-                        llvm_type: llvm_fn_type,
-                        llvm_value: llvm_fn_value,
-                    }
-                )?;
+                let my_symbol = TypedSymbol {
+                    llvm_type: llvm_fn_type,
+                    llvm_value: llvm_fn_value,
+                };
+                scope.set(&self.name, my_symbol.clone())?;
+                my_symbol
             }
-        }
+        } else {
+            scope.get(&self.name).ok_or(GenError::UndefinedSymbol(self.name.clone()))?
+        };
 
         if let Some(implementation) = self.implementation.as_ref() {
             // here we generate implementation for the function
@@ -328,6 +399,9 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
             )?;
 
             let mut inner_scope = scope.sub();
+            let params = self.params.iter().map(
+                |(pname, ptype)| ctx.types.get_type(Some(ptype)).map(|llvm_type| (pname.to_owned(), llvm_type))
+            ).collect::<Result<Vec<(String, *mut llvm::LLVMType)>, GenError>>()?;
 
             unsafe {
                 let bb = llvm::core::LLVMAppendBasicBlockInContext(
@@ -340,7 +414,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
                 // create callable context (e.g. register storage for return value and pass it to implementation)
                 if let Some(ret_type) = self.return_type.as_ref() {
-                    // when this is a funcion, allocate space for return value
+                    // when this is a function, allocate space for return value
 
                     let llvm_type = ctx.types.get_type(Some(&ret_type))?;
                     let llvm_value = llvm::core::LLVMBuildAlloca(
@@ -350,17 +424,23 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                     );
                     
                     inner_scope.callable_context = Some(CallableContext {
+                        callable_name: self.name.clone(),
+                        callable: my_symbol,
                         return_store: Some(TypedSymbol {
                             llvm_value: llvm_value,
                             llvm_type: llvm_type,
-                        })
+                        }),
+                        params: params,
                     });
                 } else {
-                    // when this is a function, let the return value be void
+                    // when this is a procedure, let the return value be void
                     // TODO: test if this works
 
                     inner_scope.callable_context = Some(CallableContext {
-                        return_store: None
+                        callable_name: self.name.clone(),
+                        callable: my_symbol,
+                        return_store: None,
+                        params: params,
                     });
                 }
 
@@ -505,6 +585,17 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::BinOp(node) => todo!(),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
+
+                // test if this is a function param:
+                if let Some(callable_context) = scope.callable_context.as_ref() {
+                    if let Some((pidx, (pname, ptype))) = callable_context.params.iter().enumerate().find(
+                        |(pidx, (pname, ptype))| *pname == *name
+                    ) {
+                        let llvm_value = llvm::core::LLVMGetParam(callable_context.callable.llvm_value, pidx as u32);
+                        return Ok(llvm_value);
+                    }
+                }
+
                 let target = scope.get(&name).ok_or(GenError::UndefinedSymbol(name.clone()))?;
                 let llvm_value = llvm::core::LLVMBuildLoad2(ctx.builder, target.llvm_type, target.llvm_value, b"\0".as_ptr() as *const i8);
                 Ok(llvm_value)
@@ -513,7 +604,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
     }
 }
 
-fn gen_write(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
+fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
     if pseudocall.params.len() != 1 {
         return Err(GenError::InvalidMacroUsage);
     }
@@ -570,6 +661,34 @@ fn gen_write(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope
     }
 }
 
+fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope) -> Result<*mut llvm::LLVMValue, GenError> {
+    if pseudocall.params.len() != 1 {
+        return Err(GenError::InvalidMacroUsage);
+    }
+
+    let param = &pseudocall.params[0];
+    let mut llvm_ptr = match param {
+        ExpressionNode::Access(name) => scope.get(&name).ok_or(GenError::UndefinedSymbol(name.clone()))?.llvm_value,
+        ExpressionNode::ArrayAccess(_) => todo!(),
+        _ => Err(GenError::InvalidMacroUsage)?,
+    };
+
+    let readln = scope.c_functions.readln.clone().ok_or(GenError::MissingCFunction)?;
+
+    unsafe {
+        Ok(
+            llvm::core::LLVMBuildCall2(
+                ctx.builder,
+                readln.llvm_type,
+                readln.llvm_value,
+                &mut llvm_ptr as *mut *mut llvm::LLVMValue,
+                1,
+                b"\0".as_ptr() as *const i8
+            )
+        )
+    }
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         let scope = scope.ok_or(GenError::InvalidScope)?;
@@ -578,9 +697,9 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
         if let Some(val) = match self.callable_name.as_str() {
             "dec" => todo!(),
             "inc" => todo!(),
-            "writeln" => Some(gen_write(self, ctx, scope, true)),
-            "write" => Some(gen_write(self, ctx, scope, false)),
-            "readln" => todo!(),
+            "writeln" => Some(gen_write_macro(self, ctx, scope, true)),
+            "write" => Some(gen_write_macro(self, ctx, scope, false)),
+            "readln" => Some(gen_readln_macro(self, ctx, scope)),
             _ => None,
         } {
             return val;

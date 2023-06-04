@@ -68,12 +68,12 @@ impl fmt::Display for ast::CallableDeclarationNode {
             writeln!(f, "CallableDeclarationNodee: procedure {}", self.name)?;
         }
         
-        if self.param_types.is_empty() {
-            writeln!(f, "  - param_types: (empty)")?;
+        if self.params.is_empty() {
+            writeln!(f, "  - params: (empty)")?;
         } else {
             writeln!(f, "  - param_types:")?;
-            for dtype in self.param_types.iter() {
-                writeln!(f, "      - {}", dtype)?;
+            for (param, dtype) in self.params.iter() {
+                writeln!(f, "      - {} : {}", param, dtype)?;
             }
         }
 

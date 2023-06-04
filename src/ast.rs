@@ -85,7 +85,7 @@ pub struct StorageDeclarationNode {
 /// declaration of a function or a procedure
 pub struct CallableDeclarationNode {
     pub name: String,
-    pub param_types: Vec<DataType>,
+    pub params: Vec<(String, DataType)>,
     pub return_type: Option<DataType>,
     pub implementation: Option<CallableImplementationNode>
 }
