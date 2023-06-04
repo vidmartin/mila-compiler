@@ -302,6 +302,18 @@ impl CodeGen<()> for ast::ProgramNode {
             unsafe {
                 let llvm_value = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
 
+                
+                llvm::core::LLVMSetInitializer(
+                    llvm_value,
+                    if let Some(init) = &variable.init {
+                        init.gen(ctx, Some(&mut global_scope))?
+                    } else {
+                        // if we don't set initializer, llc command will ignore it
+                        // TODO: more robust default value providers
+                        llvm::core::LLVMConstInt(llvm_type, 0, 0)
+                    }
+                ); 
+
                 global_scope.set(
                     &variable.name,
                     TypedSymbol {
