@@ -1,4 +1,6 @@
 
+use std::ffi::CString;
+
 use llvm_sys as llvm;
 use crate::ast;
 
@@ -14,21 +16,26 @@ pub enum GenError {
     InvalidScope,
     InvalidEncoding,
     InvalidMacroUsage,
+    MissingCFunction,
 }
 
 pub struct LlvmTypes {
     i64: *mut llvm::LLVMType,
     i32: *mut llvm::LLVMType,
+    i16: *mut llvm::LLVMType,
+    i8: *mut llvm::LLVMType,
     void: *mut llvm::LLVMType,
 }
 
 impl LlvmTypes {
-    pub fn new() -> Self {
+    pub fn new(ctx: *mut llvm::LLVMContext) -> Self {
         unsafe {
             Self {
-                i32: llvm_sys::core::LLVMInt32Type(),
-                i64: llvm_sys::core::LLVMInt64Type(),
-                void: llvm_sys::core::LLVMVoidType(),
+                i64: llvm_sys::core::LLVMInt64TypeInContext(ctx),
+                i32: llvm_sys::core::LLVMInt32TypeInContext(ctx),
+                i16: llvm_sys::core::LLVMInt16TypeInContext(ctx),
+                i8: llvm_sys::core::LLVMInt8TypeInContext(ctx),
+                void: llvm_sys::core::LLVMVoidTypeInContext(ctx),
             }
         }
     }
@@ -48,14 +55,52 @@ impl LlvmTypes {
     }
 }
 
+#[derive(Clone)]
+pub struct CFunctions {
+    printf: Option<TypedSymbol>,
+    fgets: Option<TypedSymbol>,
+    strtol: Option<TypedSymbol>,
+}
+
+const C_FUNCTIONS_DEFAULT: CFunctions = CFunctions {
+    printf: None,
+    fgets: None,
+    strtol: None,
+};
+
+impl CFunctions {
+    pub fn new() -> Self {
+        C_FUNCTIONS_DEFAULT.clone()
+    }
+}
+
+pub fn gen_printf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
+    unsafe {
+        let mut i8ptr = llvm::core::LLVMPointerType(ctx.types.i8, 0); // address space = 0 should be default
+        let llvm_fn_type = llvm::core::LLVMFunctionType(ctx.types.i32, (&mut i8ptr) as *mut *mut llvm::LLVMType, 1, 1);
+        let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"printf\0".as_ptr() as *const i8, llvm_fn_type);
+        return Ok(TypedSymbol {
+            llvm_type: llvm_fn_type,
+            llvm_value: llvm_fn_value,
+        });
+    }
+}
+
 pub struct CallableContext {
     return_store: Option<*mut llvm::LLVMValue>,
 }
 
+#[derive(Clone)]
+pub struct TypedSymbol {
+    llvm_value: *mut llvm::LLVMValue,
+    llvm_type: *mut llvm::LLVMType,
+}
+
 pub struct Scope<'a> {
-    map: std::collections::HashMap<String, *mut llvm::LLVMValue>,
+    map: std::collections::HashMap<String, TypedSymbol>,
     parent: Option<&'a Scope<'a>>,
     callable_context: Option<CallableContext>,
+    c_functions: &'a CFunctions,
 }
 
 impl<'a> Scope<'a> {
@@ -64,21 +109,22 @@ impl<'a> Scope<'a> {
             map: std::collections::HashMap::new(),
             parent: None,
             callable_context: None,
+            c_functions: &C_FUNCTIONS_DEFAULT,
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<*mut llvm::LLVMValue> {
+    pub fn get(&self, name: &str) -> Option<TypedSymbol> {
         let mut curr = Some(self);
         while let Some(scope) = curr {
             if let Some(val) = scope.map.get(name) {
-                return Some(*val);
+                return Some(val.clone());
             }
             curr = scope.parent;
         }
         return None;
     }
 
-    pub fn set(&mut self, name: &str, val: *mut llvm::LLVMValue) -> Result<(), GenError> {
+    pub fn set(&mut self, name: &str, val: TypedSymbol) -> Result<(), GenError> {
         if self.map.contains_key(name) {
             return Err(GenError::NameConflict);
         }
@@ -89,6 +135,7 @@ impl<'a> Scope<'a> {
     pub fn sub(&'a self) -> Self {
         let mut scope = Self::new();
         scope.parent = Some(self);
+        scope.c_functions = self.c_functions;
         return scope;
     }
 }
@@ -110,7 +157,7 @@ impl GenContext {
                 llvm_ctx: llvm_ctx,
                 builder: builder,
                 module: std::ptr::null_mut(),
-                types: LlvmTypes::new(),
+                types: LlvmTypes::new(llvm_ctx),
             }
         }
     }
@@ -160,10 +207,14 @@ impl CodeGen<()> for ast::ProgramNode {
 
         let name_cstr = std::ffi::CString::new(self.name.as_str()).map_err(|_| GenError::InvalidName)?;
         ctx.module = unsafe {
-            llvm::core::LLVMModuleCreateWithName(name_cstr.as_ptr())
+            llvm::core::LLVMModuleCreateWithNameInContext(name_cstr.as_ptr(), ctx.llvm_ctx)
         };
 
+        let mut c_functions = CFunctions::new();
+        c_functions.printf = Some(gen_printf(ctx)?);
+
         let mut global_scope = Scope::new();
+        global_scope.c_functions = &c_functions;
 
         for variable in self.declarations.variables.iter() {
             // TODO: arrays
@@ -176,9 +227,15 @@ impl CodeGen<()> for ast::ProgramNode {
             ).map_err(|_| GenError::InvalidName)?;
 
             unsafe {
-                let gvref = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
+                let llvm_value = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
 
-                global_scope.set(&variable.name, gvref)?;
+                global_scope.set(
+                    &variable.name,
+                    TypedSymbol {
+                        llvm_value: llvm_value,
+                        llvm_type: llvm_type
+                    }
+                )?;
             }
         }
 
@@ -192,13 +249,20 @@ impl CodeGen<()> for ast::ProgramNode {
                                 _ => return Err(GenError::TypeMismatch),
                             };
 
-                            let vref = llvm::core::LLVMConstInt(
-                                ctx.types.get_type(Some(&constant.dtype))?,
+                            let llvm_type = ctx.types.get_type(Some(&constant.dtype))?;
+                            let llvm_value = llvm::core::LLVMConstInt(
+                                llvm_type,
                                 *((&value) as *const i64 as *const u64),
                                 0
                             );
                             
-                            global_scope.set(&constant.name, vref)?;
+                            global_scope.set(
+                                &constant.name,
+                                TypedSymbol {
+                                    llvm_type: llvm_type,
+                                    llvm_value: llvm_value,
+                                }
+                            )?;
                         },
                         _ => return Err(GenError::InvalidDataType),
                     }
@@ -209,7 +273,6 @@ impl CodeGen<()> for ast::ProgramNode {
                 ast::DataType::Array { item, from, to } => todo!(),
             }
         }
-
     
         for callable in self.declarations.callables.iter() {
             callable.gen(ctx, Some(&mut global_scope))?;
@@ -237,9 +300,18 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
             ).collect::<Result<Vec<*mut llvm::LLVMType>, GenError>>()?;
 
             unsafe {
-                let fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
-                let fn_ref = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), fn_type);
-                scope.set(&self.name, fn_ref)?;
+                // TODO: consider not passing the name of the function to LLVM, so that it's anonymous
+                // and we don't get conflicts with functions imported from C standard library
+
+                let llvm_fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
+                let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), llvm_fn_type);
+                scope.set(
+                    &self.name,
+                    TypedSymbol {
+                        llvm_type: llvm_fn_type,
+                        llvm_value: llvm_fn_value,
+                    }
+                )?;
             }
         }
 
@@ -257,7 +329,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
             unsafe {
                 let bb = llvm::core::LLVMAppendBasicBlockInContext(
                     ctx.llvm_ctx,
-                    function,
+                    function.llvm_value,
                     b"\0".as_ptr() as *const i8
                 );
 
@@ -301,11 +373,16 @@ impl CodeGen<()> for ast::CallableImplementationNode {
         unsafe {
             // allocate local variables
             for local in self.variables.iter() {
-                let cstr = std::ffi::CString::new(local.name.clone()).map_err(|_| GenError::InvalidName)?;
-                let dtype = ctx.types.get_type(Some(&local.dtype))?;
-
-                let vref = llvm::core::LLVMBuildAlloca(ctx.builder, dtype, cstr.as_ptr());
-                scope.set(&local.name, vref)?;
+                // let cstr = std::ffi::CString::new(local.name.clone()).map_err(|_| GenError::InvalidName)?;
+                let llvm_type = ctx.types.get_type(Some(&local.dtype))?;
+                let llvm_value = llvm::core::LLVMBuildAlloca(ctx.builder, llvm_type, b"\0".as_ptr() as *const i8);
+                scope.set(
+                    &local.name,
+                    TypedSymbol {
+                        llvm_type: llvm_type,
+                        llvm_value: llvm_value,
+                    }
+                )?;
             }
         }
 
@@ -362,7 +439,7 @@ impl CodeGen<()> for ast::AssignmentNode {
 impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         match self {
-            ast::ExpressionNode::Call(node) => todo!(),
+            ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => todo!(),
             ast::ExpressionNode::Access(node) => todo!(),
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
@@ -371,17 +448,31 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
     }
 }
 
-fn gen_write(pseudocall: ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
+fn gen_write(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
     if pseudocall.params.len() != 1 {
         return Err(GenError::InvalidMacroUsage);
     }
 
     if let ast::ExpressionNode::Literal(ast::LiteralNode::String(msg)) = &pseudocall.params[0] {
         // special case for string literal
+        let printf = scope.c_functions.printf.clone().ok_or(GenError::MissingCFunction)?;
+        let mut msg = msg.clone();
+        if newline {
+            msg.push('\n');
+        }
+        let msglen = msg.len();
         unsafe {
-            let cstr = std::ffi::CString::new(msg.clone()).map_err(|_| GenError::InvalidEncoding)?;
-            let strlitval = llvm::core::LLVMConstString(cstr.as_ptr(), msg.len() as u32, 0);
-            // WIP
+            let cstr = std::ffi::CString::new(msg).map_err(|_| GenError::InvalidEncoding)?;
+            let mut strlitval = llvm::core::LLVMConstString(cstr.as_ptr(), msglen as u32, 0);
+            llvm::core::LLVMBuildCall2(
+                ctx.builder,
+                printf.llvm_type,
+                printf.llvm_value,
+                (&mut strlitval) as *mut *mut llvm::LLVMValue,
+                1,
+                b"\0".as_ptr() as *const i8
+            );
+            return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
         }
     }
 
@@ -393,25 +484,28 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
         let scope = scope.ok_or(GenError::InvalidScope)?;
 
         // built-in macros:
-        match self.callable_name.as_str() {
+        if let Some(val) = match self.callable_name.as_str() {
             "dec" => todo!(),
             "inc" => todo!(),
-            "writeln" => todo!(),
-            "write" => todo!(),
+            "writeln" => Some(gen_write(self, ctx, scope, true)),
+            "write" => Some(gen_write(self, ctx, scope, false)),
             "readln" => todo!(),
-            _ => {},
+            _ => None,
+        } {
+            return val;
         }
 
         let mut params = self.params.iter().map(
             |par| par.gen(ctx, Some(scope))
         ).collect::<Result<Vec<*mut llvm::LLVMValue>, GenError>>()?;
 
+        let callable = scope.get(&self.callable_name).ok_or(GenError::UndefinedSymbol(self.callable_name.clone()))?;
         unsafe {
             // if not a macro, it's a normal function call.
             let retval = llvm::core::LLVMBuildCall2(
                 ctx.builder,
-                std::ptr::null_mut(), // should be function signature, I'm trying what happens if I omit it
-                scope.get(&self.callable_name).ok_or(GenError::UndefinedSymbol(self.callable_name.clone()))?,
+                callable.llvm_type,
+                callable.llvm_value,
                 params.as_mut_ptr(),
                 params.len() as u32,
                 b"\0".as_ptr() as *const i8
