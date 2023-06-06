@@ -150,8 +150,10 @@ impl fmt::Display for ast::StatementNode {
                     "for {}",
                     forloop.iterating.name,
                 )?;
-                writeln!(f, "  - range:")?;
-                let s = format!("{}", forloop.range);
+                writeln!(f, "  - range: A --({})--> B", forloop.range.step)?;
+                let s = format!("A: {}", forloop.range.lhs);
+                writeln!(f, "{}", indent(s, 8, true))?;
+                let s = format!("B: {}", forloop.range.rhs);
                 writeln!(f, "{}", indent(s, 8, true))?;
                 writeln!(f, "  - inner:")?;
                 let s = format!("{}", *forloop.inner);
@@ -200,7 +202,7 @@ impl fmt::Display for ast::ExpressionNode {
                 writeln!(f, "{}", indent(format!("B: {}", node.index), 4, true))?;
                 Ok(())
             },
-            ast::ExpressionNode::BinOp(binop) => {
+            ast::ExpressionNode::BinaryOperator(binop) => {
                 writeln!(f, "{}", binop)?;
                 Ok(())
             }
@@ -208,23 +210,11 @@ impl fmt::Display for ast::ExpressionNode {
     }
 }
 
-impl fmt::Display for ast::BinaryOperator {
+impl fmt::Display for ast::BinaryOperatorNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f,
-            "{}{}{}",
-            if self.lhs.is_some() { "A " } else { "" },
-            self.op,
-            if self.rhs.is_some() { " B" } else { "" }
-        )?;
-        
-        if let Some(lhs) = &self.lhs {
-            writeln!(f, "{}", indent(format!("A: {}", lhs), 4, true))?;
-        }
-
-        if let Some(rhs) = &self.rhs {
-            writeln!(f, "{}", indent(format!("B: {}", rhs), 4, true))?;
-        }
-
+        writeln!(f, "A {} B", Into::<crate::tokens::Token>::into(self.kind))?;
+        writeln!(f, "{}", indent(format!("A: {}", self.lhs), 4, true))?;
+        writeln!(f, "{}", indent(format!("B: {}", self.rhs), 4, true))?;
         Ok(())
     }
 }

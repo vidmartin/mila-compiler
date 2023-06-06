@@ -103,22 +103,22 @@ pub enum Token {
     TkDot,
     /// the "<" token
     /// used as 'less than' operator
-    TkLess,
+    TkLt,
     /// the ">" token
     /// used as 'more than' operator
-    TkMore,
+    TkGt,
     /// the "=" token
     /// used as 'equals' operator, and to define constants
     TkEq,
     /// the "<>" token
     /// used as 'not equals' operator
-    TkNotEq,
+    TkNe,
     /// the "<=" token
     /// used as 'less than or equal' operator
-    TkLessOrEq,
+    TkLe,
     /// the ">=" token
     /// used as 'more than or equal' operator
-    TkMoreOrEq,
+    TkGe,
     /// the "*" token
     /// used as multiplication operator
     TkMul,

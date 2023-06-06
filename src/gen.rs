@@ -571,7 +571,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
-            ast::ExpressionNode::BinOp(node) => todo!(),
+            ast::ExpressionNode::BinaryOperator(node) => todo!(),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
 

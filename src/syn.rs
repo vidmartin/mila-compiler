@@ -1,6 +1,7 @@
 
 use crate::tokens::*;
 use crate::ast::*;
+use std::collections::btree_map::Range;
 use std::iter::Peekable;
 
 #[derive(Debug)]
@@ -11,6 +12,7 @@ pub enum SyntaxError {
     ExpectedStrLiteral { gotten: Token },
     Unexpected(Token),
     UnexpectedEnd,
+    ImplementationError,
 }
 
 pub type ParseResult<TNode> = Result<TNode, SyntaxError>;
@@ -517,11 +519,11 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkAdd | 
                 Token::TkSub | 
                 Token::TkEq | 
-                Token::TkNotEq |
-                Token::TkMore | 
-                Token::TkLess | 
-                Token::TkMoreOrEq | 
-                Token::TkLessOrEq | 
+                Token::TkNe |
+                Token::TkGt | 
+                Token::TkLt | 
+                Token::TkGe | 
+                Token::TkLe | 
                 Token::TkSqOpen |
                 Token::TkSqClose |
                 Token::KwAnd | 
@@ -671,30 +673,30 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(op @ Token::KwOr) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
+
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
                 let rhs = self.parse_e0()?;
 
-                if let ExpressionNode::BinOp(BinaryOperator {
-                    op: subop @ Token::KwOr,
+                if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: subop @ BinaryOperatorKind::Or,
                     lhs: sublhs,
                     rhs: subrhs,
                 }) = rhs {
                     // convert to left associativity
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: subop,
-                        lhs: Some(
-                            Box::new(ExpressionNode::BinOp(BinaryOperator {
-                                op: op,
-                                lhs: Some(Box::new(lhs)),
-                                rhs: sublhs,
-                            }))
-                        ),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: subop,
+                        lhs: Box::new(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                            kind: opkind,
+                            lhs: Box::new(lhs),
+                            rhs: sublhs,
+                        })),
                         rhs: subrhs,
                     }))
                 } else {
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: op,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: opkind,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
                     }))
                 }
             },
@@ -730,30 +732,30 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(op @ Token::KwAnd) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
+
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
                 let rhs = self.parse_e1()?;
 
-                if let ExpressionNode::BinOp(BinaryOperator {
-                    op: subop @ Token::KwAnd,
+                if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: subop @ BinaryOperatorKind::And,
                     lhs: sublhs,
                     rhs: subrhs,
                 }) = rhs {
                     // convert to left associativity
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: subop,
-                        lhs: Some(
-                            Box::new(ExpressionNode::BinOp(BinaryOperator {
-                                op: op,
-                                lhs: Some(Box::new(lhs)),
-                                rhs: sublhs,
-                            }))
-                        ),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: subop,
+                        lhs: Box::new(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                            kind: opkind,
+                            lhs: Box::new(lhs),
+                            rhs: sublhs,
+                        })),
                         rhs: subrhs,
                     }))
                 } else {
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: op,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: opkind,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
                     }))
                 }
             },
@@ -782,10 +784,12 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.peek() {
             Some(Token::KwNot) => {
                 self.expect_token(&Token::KwNot)?;
-                Ok(ExpressionNode::BinOp(BinaryOperator {
-                    op: Token::KwNot,
-                    lhs: None,
-                    rhs: Some(Box::new(self.parse_e2()?)),
+
+                // this is a hack for implementing the 'not' operator: disguised <> operator
+                Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: BinaryOperatorKind::Ne,
+                    lhs: Box::new(ExpressionNode::Literal(LiteralNode::Integer(0))),
+                    rhs: Box::new(self.parse_e2()?),
                 }))
             },
             Some(
@@ -812,16 +816,17 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         self.debug_print("E3R");
 
         match self.peek() {
-            Some(op @ (Token::TkLess | Token::TkLessOrEq | Token::TkMore | Token::TkMoreOrEq | Token::TkEq | Token::TkNotEq)) => {
+            Some(op @ (Token::TkLt | Token::TkLe | Token::TkGt | Token::TkGe | Token::TkEq | Token::TkNe)) => {
                 let op = op.clone();
-
                 self.expect_token(&op)?;
-                let rhs = self.parse_e4()?;
 
-                Ok(ExpressionNode::BinOp(BinaryOperator {
-                    op: op,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
+                let rhs = self.parse_e4()?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+
+                Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: opkind,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
                 }))
             },
             Some(
@@ -858,30 +863,30 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(op @ (Token::TkAdd | Token::TkSub)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
+
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
                 let rhs = self.parse_e4()?;
 
-                if let ExpressionNode::BinOp(BinaryOperator {
-                    op: subop @ (Token::TkAdd | Token::TkSub),
+                if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: subop @ (BinaryOperatorKind::Add | BinaryOperatorKind::Sub),
                     lhs: sublhs,
                     rhs: subrhs,
                 }) = rhs {
                     // convert to left associativity
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: subop,
-                        lhs: Some(
-                            Box::new(ExpressionNode::BinOp(BinaryOperator {
-                                op: op,
-                                lhs: Some(Box::new(lhs)),
-                                rhs: sublhs,
-                            }))
-                        ),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: subop,
+                        lhs: Box::new(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                            kind: opkind,
+                            lhs: Box::new(lhs),
+                            rhs: sublhs,
+                        })),
                         rhs: subrhs,
                     }))
                 } else {
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: op,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: opkind,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
                     }))
                 }
             },
@@ -891,12 +896,12 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkComma |
                 Token::TkSemicolon |
                 Token::TkAssign |
-                Token::TkLess |
-                Token::TkLessOrEq |
-                Token::TkMore |
-                Token::TkMoreOrEq |
+                Token::TkLt |
+                Token::TkLe |
+                Token::TkGt |
+                Token::TkGe |
                 Token::TkEq |
-                Token::TkNotEq |
+                Token::TkNe |
                 Token::KwAnd |
                 Token::KwDo |
                 Token::KwElse |
@@ -925,30 +930,30 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(op @ (Token::TkMul | Token::KwDiv | Token::KwMod)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
+
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
                 let rhs = self.parse_e5()?;
 
-                if let ExpressionNode::BinOp(BinaryOperator {
-                    op: subop @ (Token::TkMul | Token::KwDiv | Token::KwMod),
+                if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: subop @ (BinaryOperatorKind::Mul | BinaryOperatorKind::Div | BinaryOperatorKind::Mod),
                     lhs: sublhs,
                     rhs: subrhs,
                 }) = rhs {
                     // convert to left associativity
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: subop,
-                        lhs: Some(
-                            Box::new(ExpressionNode::BinOp(BinaryOperator {
-                                op: op,
-                                lhs: Some(Box::new(lhs)),
-                                rhs: sublhs,
-                            }))
-                        ),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: subop,
+                        lhs: Box::new(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                            kind: opkind,
+                            lhs: Box::new(lhs),
+                            rhs: sublhs,
+                        })),
                         rhs: subrhs,
                     }))
                 } else {
-                    Ok(ExpressionNode::BinOp(BinaryOperator {
-                        op: op,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
+                    Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                        kind: opkind,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
                     }))
                 }
             },
@@ -958,12 +963,12 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkComma |
                 Token::TkSemicolon |
                 Token::TkAssign |
-                Token::TkLess |
-                Token::TkLessOrEq |
-                Token::TkMore |
-                Token::TkMoreOrEq |
+                Token::TkLt |
+                Token::TkLe |
+                Token::TkGt |
+                Token::TkGe |
                 Token::TkEq |
-                Token::TkNotEq |
+                Token::TkNe |
                 Token::KwAnd |
                 Token::KwDo |
                 Token::KwElse |
@@ -987,10 +992,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(op @ (Token::TkAdd | Token::TkSub)) => {
                 let op = op.clone();
                 self.expect_token(&op)?;
-                Ok(ExpressionNode::BinOp(BinaryOperator {
-                    op: op,
-                    lhs: None,
-                    rhs: Some(Box::new(self.parse_e6()?)),
+
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+
+                // hack for implementing unary + / - :
+                Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
+                    kind: opkind,
+                    lhs: Box::new(ExpressionNode::Literal(LiteralNode::Integer(0))),
+                    rhs: Box::new(self.parse_e6()?),
                 }))
             },
             Some(
@@ -1052,12 +1061,12 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::TkSub |
                 Token::TkAssign |
                 Token::TkSemicolon |
-                Token::TkLess |
-                Token::TkLessOrEq |
-                Token::TkNotEq |
+                Token::TkLt |
+                Token::TkLe |
+                Token::TkNe |
                 Token::TkEq |
-                Token::TkMore |
-                Token::TkMoreOrEq |
+                Token::TkGt |
+                Token::TkGe |
                 Token::KwAnd |
                 Token::KwDiv |
                 Token::KwDo |
@@ -1095,14 +1104,14 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         })
     }
 
-    pub fn parse_range(&mut self) -> ParseResult<BinaryOperator> {
+    pub fn parse_range(&mut self) -> ParseResult<RangeNode> {
         self.debug_print("Range");
 
         let lhs = self.parse_e0()?;
         return Ok(self.parse_range_rest(lhs)?);
     }
 
-    pub fn parse_range_rest(&mut self, lhs: ExpressionNode) -> ParseResult<BinaryOperator> {
+    pub fn parse_range_rest(&mut self, lhs: ExpressionNode) -> ParseResult<RangeNode> {
         self.debug_print("RangeRest");
 
         let op = match self.peek() {
@@ -1113,10 +1122,11 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         self.expect_token(&op)?;
         let rhs = self.parse_e0()?;
-        Ok(BinaryOperator {
-            lhs: Some(Box::new(lhs)),
-            rhs: Some(Box::new(rhs)),
-            op: op,
+
+        Ok(RangeNode {
+            lhs: lhs,
+            rhs: rhs,
+            step: if op == Token::KwTo { 1 } else if op == Token::KwDownto { -1 } else { Err(SyntaxError::ImplementationError)? }
         })
     }
 

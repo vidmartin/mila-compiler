@@ -72,15 +72,15 @@ impl<S: Iterator<Item = char>> Lexer<S> {
             },
             '<' => {
                 match self.advance()? {
-                    '>' => Token::TkNotEq,
-                    '=' => Token::TkLessOrEq,
-                    _ => { return Some(Token::TkLess); },
+                    '>' => Token::TkNe,
+                    '=' => Token::TkLe,
+                    _ => { return Some(Token::TkLt); },
                 }
             },
             '>' => {
                 match self.advance()? {
-                    '=' => Token::TkMoreOrEq,
-                    _ => { return Some(Token::TkMore); },
+                    '=' => Token::TkGe,
+                    _ => { return Some(Token::TkGt); },
                 }
             },
             '=' => Token::TkEq,

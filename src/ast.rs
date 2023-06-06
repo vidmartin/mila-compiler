@@ -19,8 +19,14 @@ pub struct IfStatementNode {
 
 pub struct ForLoopNode {
     pub iterating: StorageDeclarationNode,
-    pub range: BinaryOperator,
+    pub range: RangeNode,
     pub inner: Box<StatementNode>,
+}
+
+pub struct RangeNode {
+    pub lhs: ExpressionNode,
+    pub rhs: ExpressionNode,
+    pub step: i64,
 }
 
 pub struct WhileLoopNode {
@@ -33,13 +39,63 @@ pub enum ExpressionNode {
     Literal(LiteralNode),
     Access(String),
     ArrayAccess(ArrayAccessNode),
-    BinOp(BinaryOperator),
+    BinaryOperator(BinaryOperatorNode),
 }
 
-pub struct BinaryOperator {
-    pub op: Token,
-    pub lhs: Option<Box<ExpressionNode>>,
-    pub rhs: Option<Box<ExpressionNode>>,
+pub struct BinaryOperatorNode {
+    pub kind: BinaryOperatorKind,
+    pub lhs: Box<ExpressionNode>,
+    pub rhs: Box<ExpressionNode>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BinaryOperatorKind {
+    Add, Mul, Sub, Div, Mod,
+    And, Or,
+    Eq, Ne, Lt, Gt, Le, Ge,
+}
+
+impl TryFrom<Token> for BinaryOperatorKind {
+    type Error = Token;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Token::TkAdd => Self::Add,
+            Token::TkSub => Self::Sub,
+            Token::TkMul => Self::Mul,
+            Token::KwDiv => Self::Div,
+            Token::KwMod => Self::Mod,
+            Token::KwAnd => Self::And,
+            Token::KwOr => Self::Or,
+            Token::TkEq => Self::Eq,
+            Token::TkNe => Self::Ne,
+            Token::TkLe => Self::Le,
+            Token::TkLt => Self::Lt,
+            Token::TkGe => Self::Ge,
+            Token::TkGt => Self::Gt,
+            _ => Err(value)?
+        })
+    }
+}
+
+impl From<BinaryOperatorKind> for Token {
+    fn from(value: BinaryOperatorKind) -> Self {
+        match value {
+            BinaryOperatorKind::Add => Self::TkAdd,
+            BinaryOperatorKind::Mul => Self::TkMul,
+            BinaryOperatorKind::Sub => Self::TkSub,
+            BinaryOperatorKind::Div => Self::KwDiv,
+            BinaryOperatorKind::Mod => Self::KwMod,
+            BinaryOperatorKind::And => Self::KwAnd,
+            BinaryOperatorKind::Or => Self::KwOr,
+            BinaryOperatorKind::Eq => Self::TkEq,
+            BinaryOperatorKind::Ne => Self::TkNe,
+            BinaryOperatorKind::Lt => Self::TkLt,
+            BinaryOperatorKind::Gt => Self::TkGt,
+            BinaryOperatorKind::Le => Self::TkLe,
+            BinaryOperatorKind::Ge => Self::TkGe,
+        }
+    }
 }
 
 pub struct ArrayAccessNode {
