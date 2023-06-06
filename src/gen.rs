@@ -525,7 +525,7 @@ impl CodeGen<()> for ast::AssignmentNode {
         match &self.target {
             ExpressionNode::Access(name) => {
                 let lhs = self.value.gen(ctx, Some(&mut scope))?;
-                let storage = scope.get(name).ok_or(GenError::UndefinedSymbol(name.clone()))?;
+                let storage = find_storage(ctx, scope, &name)?;
                 unsafe {
                     llvm::core::LLVMBuildStore(ctx.builder, lhs, storage.llvm_value);
                 }
@@ -567,6 +567,21 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::LiteralNode {
     }
 }
 
+pub fn find_storage(ctx: &mut GenContext, scope: &Scope, varname: &str) -> Result<TypedSymbol, GenError> {
+    if let Some(cctx) = &scope.callable_context {
+        if varname == cctx.callable_name {
+            if let Some(retstore) = &cctx.return_store {
+                return Ok(retstore.clone());
+            } else {
+                return Err(GenError::InvalidContext);
+            }
+        }
+    }
+
+    let target = scope.get(varname).ok_or(GenError::UndefinedSymbol(varname.to_owned()))?;
+    return Ok(target);
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         match self {
@@ -575,7 +590,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
-                let scope = scope.ok_or(GenError::InvalidScope)?;
+                let mut scope = scope.ok_or(GenError::InvalidScope)?;
 
                 // test if this is a function param:
                 if let Some(callable_context) = scope.callable_context.as_ref() {
@@ -587,7 +602,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
                     }
                 }
 
-                let target = scope.get(&name).ok_or(GenError::UndefinedSymbol(name.clone()))?;
+                let target = find_storage(ctx, scope, &name)?;
                 let llvm_value = llvm::core::LLVMBuildLoad2(ctx.builder, target.llvm_type, target.llvm_value, ANON);
                 Ok(llvm_value)
             },
