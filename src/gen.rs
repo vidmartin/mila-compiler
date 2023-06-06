@@ -104,6 +104,8 @@ pub fn gen_scanf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
     }
 }
 
+const ANON: *const i8 = b"\0".as_ptr() as *const i8;
+
 pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymbol, GenError> {
     // hard coded implementation for readln functionality
 
@@ -112,7 +114,7 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
         let llvm_readln_fn_type = llvm::core::LLVMFunctionType(ctx.types.i64, (&mut i64ptr) as *mut *mut llvm::LLVMType, 1, 1);
         let llvm_readln_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"readln\0".as_ptr() as *const i8, llvm_readln_fn_type);
         
-        let bb = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, b"\0".as_ptr() as *const i8);
+        let bb = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, ANON);
         llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
 
         let llvm_ptr = llvm::core::LLVMGetParam(llvm_readln_fn_value, 0);
@@ -125,7 +127,7 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
             scanf.llvm_value,
             scanf_params.as_mut_ptr(),
             scanf_params.len() as u32,
-            b"\0".as_ptr() as *const i8
+            ANON
         );
 
         let llvm_ge0_val = llvm::core::LLVMBuildICmp(
@@ -133,14 +135,14 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
             llvm::LLVMIntPredicate::LLVMIntSGE,
             llvm_scanf_retval,
             llvm::core::LLVMConstInt(ctx.types.i32, 0 as u64, 0),
-            b"\0".as_ptr() as *const i8
+            ANON
         );
 
         let llvm_cast = llvm::core::LLVMBuildIntCast2(
             ctx.builder, llvm_ge0_val,
             ctx.types.i64,
             1,
-            b"\0".as_ptr() as *const i8
+            ANON
         );
 
         llvm::core::LLVMBuildRet(ctx.builder, llvm_cast);
@@ -396,7 +398,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 let bb = llvm::core::LLVMAppendBasicBlockInContext(
                     ctx.llvm_ctx,
                     function.llvm_value,
-                    b"\0".as_ptr() as *const i8
+                    ANON
                 );
 
                 llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
@@ -409,7 +411,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                     let llvm_value = llvm::core::LLVMBuildAlloca(
                         ctx.builder,
                         llvm_type,
-                        b"\0".as_ptr() as *const i8
+                        ANON
                     );
                     
                     inner_scope.callable_context = Some(CallableContext {
@@ -455,7 +457,7 @@ impl CodeGen<()> for ast::CallableImplementationNode {
             for local in self.variables.iter() {
                 // let cstr = std::ffi::CString::new(local.name.clone()).map_err(|_| GenError::InvalidName)?;
                 let llvm_type = ctx.types.get_type(Some(&local.dtype))?;
-                let llvm_value = llvm::core::LLVMBuildAlloca(ctx.builder, llvm_type, b"\0".as_ptr() as *const i8);
+                let llvm_value = llvm::core::LLVMBuildAlloca(ctx.builder, llvm_type, ANON);
                 scope.set(
                     &local.name,
                     TypedSymbol {
@@ -491,7 +493,7 @@ impl CodeGen<()> for ast::StatementNode {
                             ctx.builder,
                             llvm_return_store.llvm_type, // this is the type of the value, not the pointer to it
                             llvm_return_store.llvm_value, // this is the pointer to it
-                            b"\0".as_ptr() as *const i8
+                            ANON
                         );
                         llvm::core::LLVMBuildRet(ctx.builder, llvm_return_value);
                     } else {
@@ -541,7 +543,7 @@ pub fn fetch_string_literal(ctx: &mut GenContext, string: &str) -> Result<*mut l
             let cstr = std::ffi::CString::new(string.clone()).map_err(|_| GenError::InvalidEncoding)?;
             let llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), string.len() as u32, 0);
             let llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
-            let storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, b"\0".as_ptr() as *const i8);
+            let storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, ANON);
             llvm::core::LLVMSetInitializer(storage, llvm_string_literal);
             llvm::core::LLVMSetGlobalConstant(storage, 1);
             ctx.string_literals.insert(string.to_owned(), storage);
@@ -571,7 +573,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
-            ast::ExpressionNode::BinaryOperator(node) => todo!(),
+            ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
 
@@ -586,7 +588,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
                 }
 
                 let target = scope.get(&name).ok_or(GenError::UndefinedSymbol(name.clone()))?;
-                let llvm_value = llvm::core::LLVMBuildLoad2(ctx.builder, target.llvm_type, target.llvm_value, b"\0".as_ptr() as *const i8);
+                let llvm_value = llvm::core::LLVMBuildLoad2(ctx.builder, target.llvm_type, target.llvm_value, ANON);
                 Ok(llvm_value)
             },
         }
@@ -610,7 +612,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
             // let cstr = std::ffi::CString::new(msg).map_err(|_| GenError::InvalidEncoding)?;
             // let llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), msglen as u32, 0);
             // let llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
-            // let mut storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, b"\0".as_ptr() as *const i8);
+            // let mut storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, ANON);
             // llvm::core::LLVMSetInitializer(storage, llvm_string_literal);
             // llvm::core::LLVMSetGlobalConstant(storage, 1);
             let mut storage = ast::LiteralNode::String(msg).gen(ctx, Some(scope))?;
@@ -620,7 +622,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
                 printf.llvm_value,
                 (&mut storage) as *mut *mut llvm::LLVMValue,
                 1,
-                b"\0".as_ptr() as *const i8
+                ANON
             );
 
             return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
@@ -643,7 +645,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
             printf.llvm_value,
             params.as_mut_ptr() as *mut *mut llvm::LLVMValue,
             2,
-            b"\0".as_ptr() as *const i8
+            ANON
         );
 
         return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
@@ -672,7 +674,7 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
                 readln.llvm_value,
                 &mut llvm_ptr as *mut *mut llvm::LLVMValue,
                 1,
-                b"\0".as_ptr() as *const i8
+                ANON
             )
         )
     }
@@ -707,11 +709,38 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
                 callable.llvm_value,
                 params.as_mut_ptr(),
                 params.len() as u32,
-                b"\0".as_ptr() as *const i8
+                ANON
             );
 
             return Ok(retval);
         }   
+    }
+}
+
+impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+        let mut scope = scope.ok_or(GenError::InvalidContext)?;
+
+        let lhs = self.lhs.gen(ctx, Some(&mut scope))?;
+        let rhs = self.rhs.gen(ctx, Some(&mut scope))?;
+
+        unsafe {
+            Ok(match self.kind {
+                ast::BinaryOperatorKind::Add => llvm::core::LLVMBuildAdd(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Mul => llvm::core::LLVMBuildMul(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Sub => llvm::core::LLVMBuildSub(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Div => llvm::core::LLVMBuildSDiv(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Mod => llvm::core::LLVMBuildSRem(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::And => llvm::core::LLVMBuildAnd(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Or => llvm::core::LLVMBuildOr(ctx.builder, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Eq => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntEQ, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Ne => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntNE, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Lt => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSLT, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Gt => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGT, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Le => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSLE, lhs, rhs, ANON),
+                ast::BinaryOperatorKind::Ge => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGE, lhs, rhs, ANON),
+            })
+        }
     }
 }
 
