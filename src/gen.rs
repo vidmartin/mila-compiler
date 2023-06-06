@@ -2,7 +2,7 @@
 use std::ffi::CString;
 
 use llvm_sys as llvm;
-use crate::ast::{self, ExpressionNode};
+use crate::ast::{self, ExpressionNode, StorageDeclarationNode};
 
 #[derive(Debug)]
 pub enum GenError {
@@ -265,6 +265,39 @@ pub trait CodeGen<T> {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<T, GenError>;
 }
 
+pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &StorageDeclarationNode) -> Result<*mut llvm::LLVMValue, GenError> {
+    let llvm_type = ctx.types.get_type(Some(&storage.dtype))?;
+
+    let cstr = std::ffi::CString::new(
+        storage.name.as_str()
+    ).map_err(|_| GenError::InvalidName)?;
+
+    unsafe {
+        let llvm_value = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
+
+        llvm::core::LLVMSetInitializer(
+            llvm_value,
+            if let Some(init) = &storage.init {
+                init.gen(ctx, Some(global_scope))?
+            } else {
+                // if we don't set initializer, llc command will ignore it
+                // TODO: more robust default value providers
+                llvm::core::LLVMConstInt(llvm_type, 0, 0)
+            }
+        ); 
+
+        global_scope.set(
+            &storage.name,
+            TypedSymbol {
+                llvm_value: llvm_value,
+                llvm_type: llvm_type
+            }
+        )?;
+
+        return Ok(llvm_value);
+    }
+}
+
 impl CodeGen<()> for ast::ProgramNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         if scope.is_some() {
@@ -293,69 +326,13 @@ impl CodeGen<()> for ast::ProgramNode {
             // TODO: arrays
             // TODO: default values?
 
-            let llvm_type = ctx.types.get_type(Some(&variable.dtype))?;
-
-            let cstr = std::ffi::CString::new(
-                variable.name.as_str()
-            ).map_err(|_| GenError::InvalidName)?;
-
-            unsafe {
-                let llvm_value = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
-
-                
-                llvm::core::LLVMSetInitializer(
-                    llvm_value,
-                    if let Some(init) = &variable.init {
-                        init.gen(ctx, Some(&mut global_scope))?
-                    } else {
-                        // if we don't set initializer, llc command will ignore it
-                        // TODO: more robust default value providers
-                        llvm::core::LLVMConstInt(llvm_type, 0, 0)
-                    }
-                ); 
-
-                global_scope.set(
-                    &variable.name,
-                    TypedSymbol {
-                        llvm_value: llvm_value,
-                        llvm_type: llvm_type
-                    }
-                )?;
-            }
+            add_global(ctx, &mut global_scope, &variable)?;
         }
 
         for constant in self.declarations.constants.iter() {
-            match &constant.dtype {
-                ast::DataType::One(dtype) => {
-                    match dtype.as_str() {
-                        "integer" => unsafe {
-                            let value = match constant.init {
-                                Some(ast::LiteralNode::Integer(i)) => i,
-                                _ => return Err(GenError::TypeMismatch),
-                            };
-
-                            let llvm_type = ctx.types.get_type(Some(&constant.dtype))?;
-                            let llvm_value = llvm::core::LLVMConstInt(
-                                llvm_type,
-                                *((&value) as *const i64 as *const u64),
-                                0
-                            );
-                            
-                            global_scope.set(
-                                &constant.name,
-                                TypedSymbol {
-                                    llvm_type: llvm_type,
-                                    llvm_value: llvm_value,
-                                }
-                            )?;
-                        },
-                        _ => return Err(GenError::InvalidDataType),
-                    }
-                },
-                ast::DataType::OneInternal(dtype) => {
-                    return Err(GenError::InvalidDataType);
-                },
-                ast::DataType::Array { item, from, to } => todo!(),
+            let llvm_value = add_global(ctx, &mut global_scope, &constant)?;
+            unsafe {
+                llvm::core::LLVMSetGlobalConstant(llvm_value, 1);
             }
         }
     
