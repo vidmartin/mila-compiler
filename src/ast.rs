@@ -55,6 +55,16 @@ pub enum BinaryOperatorKind {
     Eq, Ne, Lt, Gt, Le, Ge,
 }
 
+impl BinaryOperatorKind {
+    pub fn is_comparasion(&self) -> bool {
+        if let Self::Eq | Self::Ne | Self::Lt | Self::Gt | Self::Le | Self::Ge = *self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl TryFrom<Token> for BinaryOperatorKind {
     type Error = Token;
 

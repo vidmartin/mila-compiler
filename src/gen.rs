@@ -439,7 +439,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 implementation.gen(ctx, Some(&mut inner_scope))?;
 
                 // virtual exit at the end of basic block
-                llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb); // ensure we're still at the correct basic block
+                // llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb); // ensure we're still at the correct basic block -> don't ensure that, let the children ensure they behave correctly
                 ast::StatementNode::Exit.gen(ctx, Some(&mut inner_scope))?; // kind of hacky but whatever
             }
         }
@@ -740,7 +740,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
         let rhs = self.rhs.gen(ctx, Some(&mut scope))?;
 
         unsafe {
-            Ok(match self.kind {
+            let llvm_val = match self.kind {
                 ast::BinaryOperatorKind::Add => llvm::core::LLVMBuildAdd(ctx.builder, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Mul => llvm::core::LLVMBuildMul(ctx.builder, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Sub => llvm::core::LLVMBuildSub(ctx.builder, lhs, rhs, ANON),
@@ -749,14 +749,20 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
                 ast::BinaryOperatorKind::And => llvm::core::LLVMBuildAnd(ctx.builder, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Or => llvm::core::LLVMBuildOr(ctx.builder, lhs, rhs, ANON),
 
-                // TODO: cast the following to i64?
                 ast::BinaryOperatorKind::Eq => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntEQ, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Ne => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntNE, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Lt => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSLT, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Gt => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGT, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Le => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSLE, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Ge => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGE, lhs, rhs, ANON),
-            })
+            };
+
+            if self.kind.is_comparasion() {
+                let llvm_val_ext = llvm::core::LLVMBuildSExt(ctx.builder, llvm_val, ctx.types.i64, ANON);
+                Ok(llvm_val_ext)
+            } else {
+                Ok(llvm_val)
+            }
         }
     }
 }
