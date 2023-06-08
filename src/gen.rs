@@ -132,18 +132,13 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
 
         let llvm_ge0_val = llvm::core::LLVMBuildICmp(
             ctx.builder,
-            llvm::LLVMIntPredicate::LLVMIntSGE,
+            llvm::LLVMIntPredicate::LLVMIntSGT,
             llvm_scanf_retval,
-            llvm::core::LLVMConstInt(ctx.types.i32, 0 as u64, 0),
+            llvm::core::LLVMConstInt(ctx.types.i32, *(&0i64 as *const i64 as *const u64), 0),
             ANON
         );
 
-        let llvm_cast = llvm::core::LLVMBuildIntCast2(
-            ctx.builder, llvm_ge0_val,
-            ctx.types.i64,
-            1,
-            ANON
-        );
+        let llvm_cast = llvm::core::LLVMBuildSExt(ctx.builder, llvm_ge0_val, ctx.types.i64, ANON);
 
         llvm::core::LLVMBuildRet(ctx.builder, llvm_cast);
 
