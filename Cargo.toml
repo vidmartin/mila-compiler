@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 llvm-sys = { package = "llvm-sys", version = "160" }
+clap = { version = "4.3.1", features = ["derive"] }
