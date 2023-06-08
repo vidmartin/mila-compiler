@@ -748,6 +748,8 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
                 ast::BinaryOperatorKind::Mod => llvm::core::LLVMBuildSRem(ctx.builder, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::And => llvm::core::LLVMBuildAnd(ctx.builder, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Or => llvm::core::LLVMBuildOr(ctx.builder, lhs, rhs, ANON),
+
+                // TODO: cast the following to i64?
                 ast::BinaryOperatorKind::Eq => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntEQ, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Ne => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntNE, lhs, rhs, ANON),
                 ast::BinaryOperatorKind::Lt => llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSLT, lhs, rhs, ANON),
@@ -773,6 +775,46 @@ impl CodeGen<()> for ast::WhileLoopNode {
 
 impl CodeGen<()> for ast::IfStatementNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        todo!()
+        let mut scope = scope.ok_or(GenError::InvalidScope)?;
+        let callctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
+
+        unsafe {
+            let yes_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
+
+            let no_block = if self.no.is_some() {
+                Some(llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON))
+            } else { 
+                None
+            };
+
+            let rest_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
+
+            let val = llvm::core::LLVMBuildICmp(
+                ctx.builder,
+                llvm::LLVMIntPredicate::LLVMIntNE,
+                self.condition.gen(ctx, Some(&mut scope))?,
+                llvm::core::LLVMConstInt(ctx.types.i64, 0, 0),
+                ANON
+            );
+
+            llvm::core::LLVMBuildCondBr(ctx.builder, val, yes_block, no_block.unwrap_or(rest_block));
+
+            // yes block:
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, yes_block);
+            self.yes.gen(ctx, Some(&mut scope))?;
+            llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+
+            // no block:
+            if let Some(no_block) = no_block {
+                llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, no_block);
+                self.no.as_ref().unwrap().gen(ctx, Some(&mut scope))?;
+                llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+            }
+
+            // rest block:
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, rest_block);
+        }
+
+        return Ok(());
     }
 }
