@@ -809,7 +809,13 @@ impl CodeGen<()> for ast::WhileLoopNode {
 
             // emit test block (tests the condition and jumps appropriately)
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, test_block);
-            let llvm_cond_val = self.condition.gen(ctx, Some(&mut scope))?;
+            let llvm_cond_val = llvm::core::LLVMBuildICmp(
+                ctx.builder,
+                llvm::LLVMIntPredicate::LLVMIntNE,
+                self.condition.gen(ctx, Some(&mut scope))?,
+                llvm::core::LLVMConstInt(ctx.types.i64, 0, 0),
+                ANON
+            );
             llvm::core::LLVMBuildCondBr(ctx.builder, llvm_cond_val, inner_block, rest_block);
 
             // emit inner block
