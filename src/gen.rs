@@ -690,14 +690,41 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
     }
 }
 
+fn gen_accumulate_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, operation: ast::BinaryOperatorKind, amount: &ast::ExpressionNode) -> Result<*mut llvm::LLVMValue, GenError>{
+    if !operation.is_arithmetic() || pseudocall.params.len() != 1 {
+        return Err(GenError::InvalidMacroUsage);
+    }
+
+    let accessed = if let ExpressionNode::Access(_) = &pseudocall.params[0] {
+        &pseudocall.params[0]
+    } else {
+        return Err(GenError::InvalidMacroUsage);
+    };
+
+    let assign = ast::AssignmentNode {
+        target: (*accessed).clone(),
+        value: ast::ExpressionNode::BinaryOperator(ast::BinaryOperatorNode {
+            kind: operation,
+            lhs: Box::new((*accessed).clone()),
+            rhs: Box::new((*amount).clone())
+        })
+    };
+
+    assign.gen(ctx, Some(scope))?;
+
+    unsafe {
+        return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
+    }
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         let scope = scope.ok_or(GenError::InvalidScope)?;
 
         // built-in macros:
         if let Some(val) = match self.callable_name.as_str() {
-            "dec" => todo!(),
-            "inc" => todo!(),
+            "dec" => Some(gen_accumulate_macro(self, ctx, scope, ast::BinaryOperatorKind::Sub, &ast::ExpressionNode::Literal(ast::LiteralNode::Integer(1)))),
+            "inc" => Some(gen_accumulate_macro(self, ctx, scope, ast::BinaryOperatorKind::Add, &ast::ExpressionNode::Literal(ast::LiteralNode::Integer(1)))),
             "writeln" => Some(gen_write_macro(self, ctx, scope, true)),
             "write" => Some(gen_write_macro(self, ctx, scope, false)),
             "readln" => Some(gen_readln_macro(self, ctx, scope)),

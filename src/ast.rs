@@ -1,6 +1,7 @@
 
 use crate::tokens::Token;
 
+#[derive(Clone)]
 pub enum StatementNode {
     StatementBlock(StatementBlockNode),
     Assignment(AssignmentNode),
@@ -11,29 +12,34 @@ pub enum StatementNode {
     Exit,
 }
 
+#[derive(Clone)]
 pub struct IfStatementNode {
     pub condition: ExpressionNode,
     pub yes: Box<StatementNode>,
     pub no: Option<Box<StatementNode>>,
 }
 
+#[derive(Clone)]
 pub struct ForLoopNode {
     pub iterating: StorageDeclarationNode,
     pub range: RangeNode,
     pub inner: Box<StatementNode>,
 }
 
+#[derive(Clone)]
 pub struct RangeNode {
     pub lhs: ExpressionNode,
     pub rhs: ExpressionNode,
     pub step: i64,
 }
 
+#[derive(Clone)]
 pub struct WhileLoopNode {
     pub condition: ExpressionNode,
     pub inner: Box<StatementNode>,
 }
 
+#[derive(Clone)]
 pub enum ExpressionNode {
     Call(CallNode),
     Literal(LiteralNode),
@@ -42,6 +48,7 @@ pub enum ExpressionNode {
     BinaryOperator(BinaryOperatorNode),
 }
 
+#[derive(Clone)]
 pub struct BinaryOperatorNode {
     pub kind: BinaryOperatorKind,
     pub lhs: Box<ExpressionNode>,
@@ -58,6 +65,14 @@ pub enum BinaryOperatorKind {
 impl BinaryOperatorKind {
     pub fn is_comparasion(&self) -> bool {
         if let Self::Eq | Self::Ne | Self::Lt | Self::Gt | Self::Le | Self::Ge = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_arithmetic(&self) -> bool {
+        if let Self::Add | Self::Mul | Self::Sub | Self::Div | Self::Mod = *self {
             true
         } else {
             false
@@ -108,22 +123,26 @@ impl From<BinaryOperatorKind> for Token {
     }
 }
 
+#[derive(Clone)]
 pub struct ArrayAccessNode {
     pub array: Box<ExpressionNode>,
     pub index: Box<ExpressionNode>,
 }
 
+#[derive(Clone)]
 pub enum LiteralNode {
     Integer(i64),
     String(String),
 }
 
 /// top level node for the entire program
+#[derive(Clone)]
 pub struct ProgramNode {
     pub name: String,
     pub declarations: ProgramDeclarations,
 }
 
+#[derive(Clone)]
 pub struct ProgramDeclarations {
     pub variables: Vec<StorageDeclarationNode>,
     pub constants: Vec<StorageDeclarationNode>,
@@ -142,6 +161,7 @@ pub enum DataType {
 }
 
 /// declaration of a variable or a constant
+#[derive(Clone)]
 pub struct StorageDeclarationNode {
     pub name: String,
     pub dtype: DataType,
@@ -149,6 +169,7 @@ pub struct StorageDeclarationNode {
 }
 
 /// declaration of a function or a procedure
+#[derive(Clone)]
 pub struct CallableDeclarationNode {
     pub name: String,
     pub params: Vec<(String, DataType)>,
@@ -156,20 +177,24 @@ pub struct CallableDeclarationNode {
     pub implementation: Option<CallableImplementationNode>
 }
 
+#[derive(Clone)]
 pub struct CallableImplementationNode {
     pub variables: Vec<StorageDeclarationNode>,
     pub implementation: StatementBlockNode,
 }
 
+#[derive(Clone)]
 pub struct StatementBlockNode {
     pub statements: Vec<StatementNode>,
 }
 
+#[derive(Clone)]
 pub struct AssignmentNode {
     pub target: ExpressionNode,
     pub value: ExpressionNode,
 }
 
+#[derive(Clone)]
 pub struct CallNode {
     pub callable_name: String,
     pub params: Vec<ExpressionNode>,
