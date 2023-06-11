@@ -770,7 +770,30 @@ impl CodeGen<()> for ast::ForLoopNode {
 
 impl CodeGen<()> for ast::WhileLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        todo!()
+        let mut scope = scope.ok_or(GenError::InvalidScope)?;
+        let callctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
+
+        unsafe {
+            let test_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
+            let inner_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
+            let rest_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
+
+            llvm::core::LLVMBuildBr(ctx.builder, test_block); // jump to test block
+
+            // emit test block (tests the condition and jumps appropriately)
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, test_block);
+            let llvm_cond_val = self.condition.gen(ctx, Some(&mut scope))?;
+            llvm::core::LLVMBuildCondBr(ctx.builder, llvm_cond_val, inner_block, rest_block);
+
+            // emit inner block
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, inner_block);
+            self.inner.gen(ctx, Some(&mut scope))?;
+            llvm::core::LLVMBuildBr(ctx.builder, test_block);
+
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, rest_block);
+
+            return Ok(());
+        }
     }
 }
 
