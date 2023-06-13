@@ -20,6 +20,16 @@ pub enum GenError {
     InvalidAssignment,
 }
 
+impl GenError {
+    pub fn panic_or_dont(self) -> Self {
+        match &self {
+            GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
+            _ => {},
+        }
+        return self;
+    }
+}
+
 pub struct LlvmTypes {
     i64: *mut llvm::LLVMType,
     i32: *mut llvm::LLVMType,
@@ -48,7 +58,7 @@ impl LlvmTypes {
             Some(ast::DataType::One(dtype)) => {
                 match dtype.as_str() {
                     "integer" => Ok(self.i64),
-                    _ => return Err(GenError::InvalidDataType),
+                    _ => return Err(GenError::InvalidDataType.panic_or_dont()),
                 }
             },
             Some(ast::DataType::OneInternal(dtype)) => Ok(*dtype),
@@ -192,7 +202,7 @@ impl<'a> Scope<'a> {
 
     pub fn set(&mut self, name: &str, val: TypedSymbol) -> Result<(), GenError> {
         if self.map.contains_key(name) {
-            return Err(GenError::NameConflict);
+            return Err(GenError::NameConflict.panic_or_dont());
         }
         self.map.insert(name.to_string(), val);
         return Ok(());
@@ -232,7 +242,7 @@ impl GenContext {
 
     pub fn get_module(&self) -> Result<*mut llvm::LLVMModule, GenError> {
         if self.module.is_null() {
-            return Err(GenError::MissingModule);
+            return Err(GenError::MissingModule.panic_or_dont());
         }
 
         return Ok(self.module);
@@ -241,7 +251,9 @@ impl GenContext {
     pub fn get_string(&self) -> Result<String, GenError> {
         unsafe {
             let cstr = llvm::core::LLVMPrintModuleToString(self.get_module()?);
-            let rstring = std::ffi::CStr::from_ptr(cstr).to_str().map_err(|_| GenError::InvalidEncoding)?.to_owned();
+            let rstring = std::ffi::CStr::from_ptr(cstr).to_str().map_err(
+                |_| GenError::InvalidEncoding.panic_or_dont()
+            )?.to_owned();
             llvm::core::LLVMDisposeMessage(cstr);
             return Ok(rstring);
         }
@@ -267,7 +279,7 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &Stor
 
     let cstr = std::ffi::CString::new(
         storage.name.as_str()
-    ).map_err(|_| GenError::InvalidName)?;
+    ).map_err(|_| GenError::InvalidName.panic_or_dont())?;
 
     unsafe {
         let llvm_value = llvm::core::LLVMAddGlobal(ctx.get_module()?, llvm_type, cstr.as_ptr());
@@ -298,15 +310,15 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &Stor
 impl CodeGen<()> for ast::ProgramNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         if scope.is_some() {
-            return Err(GenError::InvalidScope);
+            return Err(GenError::InvalidScope.panic_or_dont());
         }
 
         if ctx.get_module().is_ok() {
             // assert that module is not defined yet
-            return Err(GenError::InvalidContext);
+            return Err(GenError::InvalidContext.panic_or_dont());
         }
 
-        let name_cstr = std::ffi::CString::new(self.name.as_str()).map_err(|_| GenError::InvalidName)?;
+        let name_cstr = std::ffi::CString::new(self.name.as_str()).map_err(|_| GenError::InvalidName.panic_or_dont())?;
         ctx.module = unsafe {
             llvm::core::LLVMModuleCreateWithNameInContext(name_cstr.as_ptr(), ctx.llvm_ctx)
         };
@@ -343,15 +355,15 @@ impl CodeGen<()> for ast::ProgramNode {
 
 impl CodeGen<()> for ast::CallableDeclarationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        let scope = scope.ok_or(GenError::InvalidScope)?;
+        let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
         if scope.callable_context.is_some() {
-            return Err(GenError::InvalidScope);
+            return Err(GenError::InvalidScope.panic_or_dont());
         }
 
         let my_symbol = if scope.get(&self.name).is_none() {
             // function with this name not declared yet, so we declare it
 
-            let cstr = std::ffi::CString::new(self.name.clone()).map_err(|_| GenError::InvalidName)?;
+            let cstr = std::ffi::CString::new(self.name.clone()).map_err(|_| GenError::InvalidName.panic_or_dont())?;
 
             let return_type = ctx.types.get_type(self.return_type.as_ref())?;
             let mut param_types = self.params.iter().map(
@@ -372,7 +384,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 my_symbol
             }
         } else {
-            scope.get(&self.name).ok_or(GenError::UndefinedSymbol(self.name.clone()))?
+            scope.get(&self.name).ok_or_else(|| GenError::UndefinedSymbol(self.name.clone()).panic_or_dont())?
         };
 
         if let Some(implementation) = self.implementation.as_ref() {
@@ -380,8 +392,8 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
             // TODO: check that implementation for this function hasn't been generated yet
             // TODO: check that the function signature matches
 
-            let function = scope.get(&self.name).ok_or(
-                GenError::UndefinedSymbol(self.name.clone())
+            let function = scope.get(&self.name).ok_or_else(
+                || GenError::UndefinedSymbol(self.name.clone()).panic_or_dont()
             )?;
 
             let mut inner_scope = scope.sub();
@@ -444,7 +456,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
 impl CodeGen<bool> for ast::CallableImplementationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
-        let scope = scope.ok_or(GenError::InvalidScope)?;
+        let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         unsafe {
             // allocate local variables
@@ -477,8 +489,8 @@ impl CodeGen<bool> for ast::StatementNode {
             ast::StatementNode::WhileLoop(node) => node.gen(ctx, scope).map(|_| true),
             ast::StatementNode::IfStatement(node) => node.gen(ctx, scope).map(|_| true),
             ast::StatementNode::Exit => {
-                let scope = scope.ok_or(GenError::InvalidScope)?;
-                let call_ctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
+                let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+                let call_ctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
                 unsafe {
                     if let Some(llvm_return_store) = call_ctx.return_store.clone() {
                         let llvm_return_value = llvm::core::LLVMBuildLoad2(
@@ -501,7 +513,7 @@ impl CodeGen<bool> for ast::StatementNode {
 
 impl CodeGen<bool> for ast::StatementBlockNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
-        let mut scope = scope.ok_or(GenError::InvalidScope)?;
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         for stmt in self.statements.iter() {
             if stmt.gen(ctx, Some(&mut scope))? == false {
@@ -515,7 +527,7 @@ impl CodeGen<bool> for ast::StatementBlockNode {
 
 impl CodeGen<()> for ast::AssignmentNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        let mut scope = scope.ok_or(GenError::InvalidScope)?;
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         match &self.target {
             ExpressionNode::Access(name) => {
@@ -527,7 +539,7 @@ impl CodeGen<()> for ast::AssignmentNode {
                 Ok(())
             },
             ExpressionNode::ArrayAccess(_) => todo!(),
-            _ => Err(GenError::InvalidAssignment)
+            _ => Err(GenError::InvalidAssignment.panic_or_dont())
         }
     }
 }
@@ -535,7 +547,7 @@ impl CodeGen<()> for ast::AssignmentNode {
 pub fn fetch_string_literal(ctx: &mut GenContext, string: &str) -> Result<*mut llvm::LLVMValue, GenError> {
     unsafe {
         if !ctx.string_literals.contains_key(string) {
-            let cstr = std::ffi::CString::new(string.clone()).map_err(|_| GenError::InvalidEncoding)?;
+            let cstr = std::ffi::CString::new(string.clone()).map_err(|_| GenError::InvalidEncoding.panic_or_dont())?;
             let llvm_string_literal = llvm::core::LLVMConstStringInContext(ctx.llvm_ctx, cstr.as_ptr(), string.len() as u32, 0);
             let llvm_string_type = llvm::core::LLVMTypeOf(llvm_string_literal);
             let storage = llvm::core::LLVMAddGlobal(ctx.module, llvm_string_type, ANON);
@@ -568,12 +580,12 @@ pub fn find_storage(ctx: &mut GenContext, scope: &Scope, varname: &str) -> Resul
             if let Some(retstore) = &cctx.return_store {
                 return Ok(retstore.clone());
             } else {
-                return Err(GenError::InvalidContext);
+                return Err(GenError::InvalidContext.panic_or_dont());
             }
         }
     }
 
-    let target = scope.get(varname).ok_or(GenError::UndefinedSymbol(varname.to_owned()))?;
+    let target = scope.get(varname).ok_or_else(|| GenError::UndefinedSymbol(varname.to_owned()).panic_or_dont())?;
     return Ok(target);
 }
 
@@ -585,7 +597,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
-                let mut scope = scope.ok_or(GenError::InvalidScope)?;
+                let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
                 // test if this is a function param:
                 if let Some(callable_context) = scope.callable_context.as_ref() {
@@ -607,10 +619,10 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
 
 fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, newline: bool) -> Result<*mut llvm::LLVMValue, GenError> {
     if pseudocall.params.len() != 1 {
-        return Err(GenError::InvalidMacroUsage);
+        return Err(GenError::InvalidMacroUsage.panic_or_dont());
     }
 
-    let printf = scope.c_functions.printf.clone().ok_or(GenError::MissingCFunction)?;
+    let printf = scope.c_functions.printf.clone().ok_or_else(|| GenError::MissingCFunction.panic_or_dont())?;
 
     if let ast::ExpressionNode::Literal(ast::LiteralNode::String(msg)) = &pseudocall.params[0] {
         // special case for string literal
@@ -642,7 +654,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
     let param = pseudocall.params[0].gen(ctx, Some(scope))?; // evaluate param
     unsafe {
         if llvm::core::LLVMTypeOf(param) != ctx.types.i64 {
-            return Err(GenError::TypeMismatch);
+            return Err(GenError::TypeMismatch.panic_or_dont());
         }
 
         let formatter = fetch_string_literal(ctx, if newline { "%ld\n" } else { "%ld" })?;
@@ -664,17 +676,19 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
 
 fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope) -> Result<*mut llvm::LLVMValue, GenError> {
     if pseudocall.params.len() != 1 {
-        return Err(GenError::InvalidMacroUsage);
+        return Err(GenError::InvalidMacroUsage.panic_or_dont());
     }
 
     let param = &pseudocall.params[0];
     let mut llvm_ptr = match param {
-        ExpressionNode::Access(name) => scope.get(&name).ok_or(GenError::UndefinedSymbol(name.clone()))?.llvm_value,
+        ExpressionNode::Access(name) => scope.get(&name).ok_or_else(
+            || GenError::UndefinedSymbol(name.clone()).panic_or_dont()
+        )?.llvm_value,
         ExpressionNode::ArrayAccess(_) => todo!(),
-        _ => Err(GenError::InvalidMacroUsage)?,
+        _ => Err(GenError::InvalidMacroUsage.panic_or_dont())?,
     };
 
-    let readln = scope.c_functions.readln.clone().ok_or(GenError::MissingCFunction)?;
+    let readln = scope.c_functions.readln.clone().ok_or_else(|| GenError::MissingCFunction.panic_or_dont())?;
 
     unsafe {
         Ok(
@@ -692,13 +706,13 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
 
 fn gen_accumulate_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut Scope, operation: ast::BinaryOperatorKind, amount: &ast::ExpressionNode) -> Result<*mut llvm::LLVMValue, GenError>{
     if !operation.is_arithmetic() || pseudocall.params.len() != 1 {
-        return Err(GenError::InvalidMacroUsage);
+        return Err(GenError::InvalidMacroUsage.panic_or_dont());
     }
 
     let accessed = if let ExpressionNode::Access(_) = &pseudocall.params[0] {
         &pseudocall.params[0]
     } else {
-        return Err(GenError::InvalidMacroUsage);
+        return Err(GenError::InvalidMacroUsage.panic_or_dont());
     };
 
     let assign = ast::AssignmentNode {
@@ -719,7 +733,7 @@ fn gen_accumulate_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope:
 
 impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
-        let scope = scope.ok_or(GenError::InvalidScope)?;
+        let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         // built-in macros:
         if let Some(val) = match self.callable_name.as_str() {
@@ -737,7 +751,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
             |par| par.gen(ctx, Some(scope))
         ).collect::<Result<Vec<*mut llvm::LLVMValue>, GenError>>()?;
 
-        let callable = scope.get(&self.callable_name).ok_or(GenError::UndefinedSymbol(self.callable_name.clone()))?;
+        let callable = scope.get(&self.callable_name).ok_or_else(|| GenError::UndefinedSymbol(self.callable_name.clone()).panic_or_dont())?;
         unsafe {
             // if not a macro, it's a normal function call.
             let retval = llvm::core::LLVMBuildCall2(
@@ -756,7 +770,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
 
 impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
-        let mut scope = scope.ok_or(GenError::InvalidContext)?;
+        let mut scope = scope.ok_or_else(|| GenError::InvalidContext.panic_or_dont())?;
 
         let lhs = self.lhs.gen(ctx, Some(&mut scope))?;
         let rhs = self.rhs.gen(ctx, Some(&mut scope))?;
@@ -797,8 +811,8 @@ impl CodeGen<()> for ast::ForLoopNode {
 
 impl CodeGen<()> for ast::WhileLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        let mut scope = scope.ok_or(GenError::InvalidScope)?;
-        let callctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let callctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         unsafe {
             let test_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
@@ -833,8 +847,8 @@ impl CodeGen<()> for ast::WhileLoopNode {
 
 impl CodeGen<()> for ast::IfStatementNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        let mut scope = scope.ok_or(GenError::InvalidScope)?;
-        let callctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let callctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         unsafe {
             let yes_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
