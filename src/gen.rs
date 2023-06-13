@@ -531,10 +531,10 @@ impl CodeGen<()> for ast::AssignmentNode {
 
         match &self.target {
             ExpressionNode::Access(name) => {
-                let lhs = self.value.gen(ctx, Some(&mut scope))?;
+                let rhs = self.value.gen(ctx, Some(&mut scope))?;
                 let storage = find_storage(ctx, scope, &name)?;
                 unsafe {
-                    llvm::core::LLVMBuildStore(ctx.builder, lhs, storage.llvm_value);
+                    llvm::core::LLVMBuildStore(ctx.builder, rhs, storage.llvm_value);
                 }
                 Ok(())
             },
