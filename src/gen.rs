@@ -457,18 +457,36 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 impl CodeGen<bool> for ast::CallableImplementationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
         let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let (params, callable) = {
+            let cc = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+            (cc.params.clone(), cc.callable.clone())
+        };
 
         unsafe {
+            // allocate local variables for parameters and copy them
+            for (i, (pname, ptype)) in params.iter().enumerate() {
+                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, *ptype, ANON);
+                let llvm_param = llvm::core::LLVMGetParam(callable.llvm_value, i as u32);
+                llvm::core::LLVMBuildStore(ctx.builder, llvm_param, llvm_place);
+                scope.set(
+                    pname,
+                    TypedSymbol {
+                        llvm_type: *ptype,
+                        llvm_value: llvm_place,
+                    }
+                )?;
+            }
+
             // allocate local variables
             for local in self.variables.iter() {
                 // let cstr = std::ffi::CString::new(local.name.clone()).map_err(|_| GenError::InvalidName)?;
                 let llvm_type = ctx.types.get_type(Some(&local.dtype))?;
-                let llvm_value = llvm::core::LLVMBuildAlloca(ctx.builder, llvm_type, ANON);
+                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, llvm_type, ANON);
                 scope.set(
                     &local.name,
                     TypedSymbol {
                         llvm_type: llvm_type,
-                        llvm_value: llvm_value,
+                        llvm_value: llvm_place,
                     }
                 )?;
             }
@@ -597,18 +615,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::ArrayAccess(node) => todo!(),
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
-                let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-
-                // test if this is a function param:
-                if let Some(callable_context) = scope.callable_context.as_ref() {
-                    if let Some((pidx, (pname, ptype))) = callable_context.params.iter().enumerate().find(
-                        |(pidx, (pname, ptype))| *pname == *name
-                    ) {
-                        let llvm_value = llvm::core::LLVMGetParam(callable_context.callable.llvm_value, pidx as u32);
-                        return Ok(llvm_value);
-                    }
-                }
-
+                let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
                 let target = find_storage(ctx, scope, &name)?;
                 let llvm_value = llvm::core::LLVMBuildLoad2(ctx.builder, target.llvm_type, target.llvm_value, ANON);
                 Ok(llvm_value)
