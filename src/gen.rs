@@ -1,8 +1,6 @@
 
-use std::ffi::CString;
-
 use llvm_sys as llvm;
-use crate::ast::{self, ExpressionNode, StorageDeclarationNode};
+use crate::ast;
 
 #[derive(Debug)]
 pub enum GenError {
@@ -274,7 +272,7 @@ pub trait CodeGen<T> {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<T, GenError>;
 }
 
-pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &StorageDeclarationNode) -> Result<*mut llvm::LLVMValue, GenError> {
+pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &ast::StorageDeclarationNode) -> Result<*mut llvm::LLVMValue, GenError> {
     let llvm_type = ctx.types.get_type(Some(&storage.dtype))?;
 
     let cstr = std::ffi::CString::new(
@@ -548,7 +546,7 @@ impl CodeGen<()> for ast::AssignmentNode {
         let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         match &self.target {
-            ExpressionNode::Access(name) => {
+            ast::ExpressionNode::Access(name) => {
                 let rhs = self.value.gen(ctx, Some(&mut scope))?;
                 let storage = find_storage(ctx, scope, &name)?;
                 unsafe {
@@ -556,7 +554,7 @@ impl CodeGen<()> for ast::AssignmentNode {
                 }
                 Ok(())
             },
-            ExpressionNode::ArrayAccess(_) => todo!(),
+            ast::ExpressionNode::ArrayAccess(_) => todo!(),
             _ => Err(GenError::InvalidAssignment.panic_or_dont())
         }
     }
@@ -688,10 +686,10 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
 
     let param = &pseudocall.params[0];
     let mut llvm_ptr = match param {
-        ExpressionNode::Access(name) => scope.get(&name).ok_or_else(
+        ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(
             || GenError::UndefinedSymbol(name.clone()).panic_or_dont()
         )?.llvm_value,
-        ExpressionNode::ArrayAccess(_) => todo!(),
+        ast::ExpressionNode::ArrayAccess(_) => todo!(),
         _ => Err(GenError::InvalidMacroUsage.panic_or_dont())?,
     };
 
@@ -716,7 +714,7 @@ fn gen_accumulate_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope:
         return Err(GenError::InvalidMacroUsage.panic_or_dont());
     }
 
-    let accessed = if let ExpressionNode::Access(_) = &pseudocall.params[0] {
+    let accessed = if let ast::ExpressionNode::Access(_) = &pseudocall.params[0] {
         &pseudocall.params[0]
     } else {
         return Err(GenError::InvalidMacroUsage.panic_or_dont());
