@@ -431,11 +431,10 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 }
 
                 // generate code
-                implementation.gen(ctx, Some(&mut inner_scope))?;
-
-                // virtual exit at the end of basic block
-                // llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb); // ensure we're still at the correct basic block -> don't ensure that, let the children ensure they behave correctly
-                ast::StatementNode::Exit.gen(ctx, Some(&mut inner_scope))?; // kind of hacky but whatever
+                if implementation.gen(ctx, Some(&mut inner_scope))? {
+                    // virtual exit at the end of basic block
+                    ast::StatementNode::Exit.gen(ctx, Some(&mut inner_scope))?; // kind of hacky but whatever
+                }
             }
         }
 
@@ -443,8 +442,8 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
     }
 }
 
-impl CodeGen<()> for ast::CallableImplementationNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+impl CodeGen<bool> for ast::CallableImplementationNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
         let scope = scope.ok_or(GenError::InvalidScope)?;
 
         unsafe {
@@ -464,21 +463,19 @@ impl CodeGen<()> for ast::CallableImplementationNode {
         }
 
         // generate code
-        self.implementation.gen(ctx, Some(scope))?;
-
-        return Ok(());
+        return Ok(self.implementation.gen(ctx, Some(scope))?);
     }
 }
 
-impl CodeGen<()> for ast::StatementNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+impl CodeGen<bool> for ast::StatementNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
         match self {
             ast::StatementNode::StatementBlock(node) => node.gen(ctx, scope),
-            ast::StatementNode::Assignment(node) => node.gen(ctx, scope),
-            ast::StatementNode::Expression(node) => node.gen(ctx, scope).map(|_| ()),
-            ast::StatementNode::ForLoop(node) => node.gen(ctx, scope),
-            ast::StatementNode::WhileLoop(node) => node.gen(ctx, scope),
-            ast::StatementNode::IfStatement(node) => node.gen(ctx, scope),
+            ast::StatementNode::Assignment(node) => node.gen(ctx, scope).map(|_| true),
+            ast::StatementNode::Expression(node) => node.gen(ctx, scope).map(|_| true),
+            ast::StatementNode::ForLoop(node) => node.gen(ctx, scope).map(|_| true),
+            ast::StatementNode::WhileLoop(node) => node.gen(ctx, scope).map(|_| true),
+            ast::StatementNode::IfStatement(node) => node.gen(ctx, scope).map(|_| true),
             ast::StatementNode::Exit => {
                 let scope = scope.ok_or(GenError::InvalidScope)?;
                 let call_ctx = scope.callable_context.as_ref().ok_or(GenError::InvalidScope)?;
@@ -495,21 +492,24 @@ impl CodeGen<()> for ast::StatementNode {
                         llvm::core::LLVMBuildRetVoid(ctx.builder);
                     }
                 }
-                Ok(())
+                // we return false after terminaning instructions to tell the caller that they cant use this basic block anymore
+                return Ok(false);
             }
         }
     }
 }
 
-impl CodeGen<()> for ast::StatementBlockNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
+impl CodeGen<bool> for ast::StatementBlockNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
         let mut scope = scope.ok_or(GenError::InvalidScope)?;
 
         for stmt in self.statements.iter() {
-            stmt.gen(ctx, Some(&mut scope))?;
+            if stmt.gen(ctx, Some(&mut scope))? == false {
+                return Ok(false);
+            }
         }
 
-        return Ok(());
+        return Ok(true);
     }
 }
 
@@ -820,8 +820,9 @@ impl CodeGen<()> for ast::WhileLoopNode {
 
             // emit inner block
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, inner_block);
-            self.inner.gen(ctx, Some(&mut scope))?;
-            llvm::core::LLVMBuildBr(ctx.builder, test_block);
+            if self.inner.gen(ctx, Some(&mut scope))? {
+                llvm::core::LLVMBuildBr(ctx.builder, test_block);
+            }
 
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, rest_block);
 
@@ -858,14 +859,16 @@ impl CodeGen<()> for ast::IfStatementNode {
 
             // yes block:
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, yes_block);
-            self.yes.gen(ctx, Some(&mut scope))?;
-            llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+            if self.yes.gen(ctx, Some(&mut scope))? {
+                llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+            }
 
             // no block:
             if let Some(no_block) = no_block {
                 llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, no_block);
-                self.no.as_ref().unwrap().gen(ctx, Some(&mut scope))?;
-                llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+                if self.no.as_ref().unwrap().gen(ctx, Some(&mut scope))? {
+                    llvm::core::LLVMBuildBr(ctx.builder, rest_block);
+                }
             }
 
             // rest block:
