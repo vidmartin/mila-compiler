@@ -22,10 +22,10 @@ pub enum GenError {
 
 impl GenError {
     pub fn panic_or_dont(self) -> Self {
-        match &self {
-            GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
-            _ => {},
-        }
+        // match &self {
+        //     GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
+        //     _ => {},
+        // }
         return self;
     }
 }
@@ -344,7 +344,7 @@ impl CodeGen<()> for ast::ProgramNode {
                 llvm::core::LLVMSetGlobalConstant(llvm_value, 1);
             }
         }
-    
+
         for callable in self.declarations.callables.iter() {
             callable.gen(ctx, Some(&mut global_scope))?;
         }

@@ -153,10 +153,18 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::TkSemicolon)?;
                 let mut rest_of_declarations = self.parse_declarations()?;
                 match first_declaration {
-                    Declaration::Variables(mut storage_nodes) => rest_of_declarations.variables.append(&mut storage_nodes),
-                    Declaration::Constants(mut storage_nodes) => rest_of_declarations.constants.append(&mut storage_nodes),
-                    Declaration::Function(callable_node) | Declaration::Procedure(callable_node) => rest_of_declarations.callables.push(callable_node),
-                };
+                    Declaration::Variables(mut storage_nodes) => {
+                        storage_nodes.append(&mut rest_of_declarations.variables);
+                        rest_of_declarations.variables = storage_nodes;
+                    },
+                    Declaration::Constants(mut storage_nodes) => {
+                        storage_nodes.append(&mut rest_of_declarations.constants);
+                        rest_of_declarations.constants = storage_nodes;
+                    },
+                    Declaration::Function(callable_node) | Declaration::Procedure(callable_node) => {
+                        rest_of_declarations.callables.insert(0, callable_node);
+                    }
+                }
                 Ok(rest_of_declarations)
             },
             Some(Token::KwBegin) => {
