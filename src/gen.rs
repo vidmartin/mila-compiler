@@ -176,6 +176,7 @@ pub struct Scope<'a> {
     parent: Option<&'a Scope<'a>>,
     callable_context: Option<CallableContext>,
     c_functions: &'a BuiltInFunctions,
+    break_target: Option<*mut llvm::LLVMBasicBlock>,
 }
 
 impl<'a> Scope<'a> {
@@ -185,6 +186,7 @@ impl<'a> Scope<'a> {
             parent: None,
             callable_context: None,
             c_functions: &C_FUNCTIONS_DEFAULT,
+            break_target: None,
         }
     }
 
@@ -219,6 +221,17 @@ impl<'a> Scope<'a> {
         while let Some(scope) = curr {
             if let Some(val) = scope.callable_context.as_ref() {
                 return Some(&val);
+            }
+            curr = scope.parent;
+        }
+        return None;
+    }
+
+    pub fn get_break_target(&'a self) -> Option<*mut llvm::LLVMBasicBlock> {
+        let mut curr = Some(self);
+        while let Some(scope) = curr {
+            if let Some(val) = scope.break_target {
+                return Some(val);
             }
             curr = scope.parent;
         }
@@ -535,10 +548,21 @@ impl CodeGen<bool> for ast::StatementNode {
                         llvm::core::LLVMBuildRetVoid(ctx.builder);
                     }
                 }
-                // we return false after terminaning instructions to tell the caller that they cant use this basic block anymore
+
+                // we return false after terminaning statements to tell the caller that they cant use this basic block anymore
                 return Ok(false);
             },
-            ast::StatementNode::Break => todo!(),
+            ast::StatementNode::Break => unsafe {
+                let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+                let break_target = match scope.break_target {
+                    Some(bt) => bt,
+                    None => return Err(GenError::InvalidScope.panic_or_dont()),
+                };
+                llvm::core::LLVMBuildBr(ctx.builder, break_target);
+
+                // we return false after terminaning statements to tell the caller that they cant use this basic block anymore
+                return Ok(false);
+            },
         }
     }
 }
@@ -839,16 +863,17 @@ impl CodeGen<()> for ast::ForLoopNode {
             let endval = self.range.rhs.gen(ctx, Some(&mut scope))?;
             let stepval = llvm::core::LLVMConstInt(ctx.types.i64, *(&self.range.step as *const i64 as *const u64), 0);
 
-            // varref will be the only one of the three above that will be accessible in mila source code
-            let mut inner_scope = scope.sub();
-            inner_scope.set(&self.iterating.name, TypedSymbol { llvm_value: varref, llvm_type: ctx.types.i64 })?;
-
             llvm::core::LLVMBuildStore(ctx.builder, initval, iterref);
 
             let inner_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
             let rest_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
 
             llvm::core::LLVMBuildBr(ctx.builder, inner_block);
+
+            // varref will be the only one of the three above that will be accessible in mila source code
+            let mut inner_scope = scope.sub();
+            inner_scope.set(&self.iterating.name, TypedSymbol { llvm_value: varref, llvm_type: ctx.types.i64 })?;
+            inner_scope.break_target = Some(rest_block);
 
             // BEGIN INNER BLOCK
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, inner_block);
@@ -903,9 +928,12 @@ impl CodeGen<()> for ast::WhileLoopNode {
             );
             llvm::core::LLVMBuildCondBr(ctx.builder, llvm_cond_val, inner_block, rest_block);
 
+            let mut inner_scope = scope.sub();
+            inner_scope.break_target = Some(rest_block);
+
             // emit inner block
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, inner_block);
-            if self.inner.gen(ctx, Some(&mut scope))? {
+            if self.inner.gen(ctx, Some(&mut inner_scope))? {
                 llvm::core::LLVMBuildBr(ctx.builder, test_block);
             }
 
