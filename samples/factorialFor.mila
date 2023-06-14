@@ -4,15 +4,21 @@ function factorial(n: integer): integer;
 var m: integer;
 begin
     m := 1;
-    for i := 1 to n do m := m * i;
+    for i := n downto 1 do
+    begin
+        write('i = ');
+        writeln(i);
+        m := m * i;
+    end;
     factorial := m;
 end;
 
-var n: integer;
+var n, res: integer;
 
 begin
     write('Enter number: ');
     readln(n);
+    res := factorial(n);
     write('The factorial of that is: ');
-    writeln(factorial(n));
+    writeln(res);
 end.

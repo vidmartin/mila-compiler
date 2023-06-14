@@ -845,10 +845,18 @@ impl CodeGen<()> for ast::ForLoopNode {
             llvm::core::LLVMBuildStore(ctx.builder, iterval, varref); // store iteration value to user accessible variable
 
             if self.inner.gen(ctx, Some(&mut inner_scope))? {
+                // increment iteration variable:
                 let iterval = llvm::core::LLVMBuildLoad2(ctx.builder, ctx.types.i64, iterref, ANON);
                 let iterval = llvm::core::LLVMBuildAdd(ctx.builder, stepval, iterval, ANON);
                 llvm::core::LLVMBuildStore(ctx.builder, iterval, iterref);
-                let cmpres = llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGT, iterval, endval, ANON);
+
+                let cmpres = llvm::core::LLVMBuildICmp(
+                    ctx.builder,
+                    if self.range.step > 0 { llvm::LLVMIntPredicate::LLVMIntSGT } else { llvm::LLVMIntPredicate::LLVMIntSLT },
+                    iterval,
+                    endval,
+                    ANON
+                );
                 llvm::core::LLVMBuildCondBr(ctx.builder, cmpres, rest_block, inner_block);
             }
             // } END INNER BLOCK
