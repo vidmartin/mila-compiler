@@ -213,6 +213,17 @@ impl<'a> Scope<'a> {
         scope.c_functions = self.c_functions;
         return scope;
     }
+
+    pub fn get_callable_context(&'a self) -> Option<&'a CallableContext> {
+        let mut curr = Some(self);
+        while let Some(scope) = curr {
+            if let Some(val) = scope.callable_context.as_ref() {
+                return Some(&val);
+            }
+            curr = scope.parent;
+        }
+        return None;
+    }
 }
 
 pub struct GenContext {
@@ -355,7 +366,7 @@ impl CodeGen<()> for ast::ProgramNode {
 impl CodeGen<()> for ast::CallableDeclarationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-        if scope.callable_context.is_some() {
+        if scope.get_callable_context().is_some() {
             return Err(GenError::InvalidScope.panic_or_dont());
         }
 
@@ -460,7 +471,7 @@ impl CodeGen<bool> for ast::CallableImplementationNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<bool, GenError> {
         let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
         let (params, callable) = {
-            let cc = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+            let cc = scope.get_callable_context().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
             (cc.params.clone(), cc.callable.clone())
         };
 
@@ -510,7 +521,7 @@ impl CodeGen<bool> for ast::StatementNode {
             ast::StatementNode::IfStatement(node) => node.gen(ctx, scope).map(|_| true),
             ast::StatementNode::Exit => {
                 let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-                let call_ctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+                let call_ctx = scope.get_callable_context().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
                 unsafe {
                     if let Some(llvm_return_store) = call_ctx.return_store.clone() {
                         let llvm_return_value = llvm::core::LLVMBuildLoad2(
@@ -595,7 +606,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::LiteralNode {
 }
 
 pub fn find_storage(ctx: &mut GenContext, scope: &Scope, varname: &str) -> Result<TypedSymbol, GenError> {
-    if let Some(cctx) = &scope.callable_context {
+    if let Some(cctx) = scope.get_callable_context() {
         if varname == cctx.callable_name {
             if let Some(retstore) = &cctx.return_store {
                 return Ok(retstore.clone());
@@ -817,7 +828,7 @@ impl CodeGen<()> for ast::ForLoopNode {
         // we're ignoring all attributes of self.iterating except self.iterating.name! this is quite ugly ngl
 
         let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-        let llvm_fn_value = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?.callable.llvm_value;
+        let llvm_fn_value = scope.get_callable_context().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?.callable.llvm_value;
 
         unsafe {
             let iterref = llvm::core::LLVMBuildAlloca(ctx.builder, ctx.types.i64, ANON);
@@ -871,7 +882,7 @@ impl CodeGen<()> for ast::ForLoopNode {
 impl CodeGen<()> for ast::WhileLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-        let callctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let callctx = scope.get_callable_context().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         unsafe {
             let test_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);
@@ -907,7 +918,7 @@ impl CodeGen<()> for ast::WhileLoopNode {
 impl CodeGen<()> for ast::IfStatementNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
         let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-        let callctx = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let callctx = scope.get_callable_context().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
 
         unsafe {
             let yes_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, callctx.callable.llvm_value, ANON);

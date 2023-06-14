@@ -3,14 +3,8 @@ program forCycle;
 function factorial(n: integer): integer;
 var m: integer;
 begin
-    m := 1;
-    for i := n downto 1 do
-    begin
-        write('i = ');
-        writeln(i);
-        m := m * i;
-    end;
-    factorial := m;
+    factorial := 1;
+    for i := 1 to n do factorial := factorial * i;
 end;
 
 var n, res: integer;
