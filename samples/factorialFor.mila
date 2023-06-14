@@ -3,7 +3,7 @@ program forCycle;
 function factorial(n: integer): integer;
 begin
     factorial := 1;
-    for i in 1 to n do factorial := factorial * i end;
+    for i := 1 to n do factorial := factorial * i;
 end;
 
 var n: integer;
