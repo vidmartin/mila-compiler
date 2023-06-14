@@ -361,19 +361,22 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
         let my_symbol = if scope.get(&self.name).is_none() {
             // function with this name not declared yet, so we declare it
 
-            let cstr = std::ffi::CString::new(self.name.clone()).map_err(|_| GenError::InvalidName.panic_or_dont())?;
-
             let return_type = ctx.types.get_type(self.return_type.as_ref())?;
             let mut param_types = self.params.iter().map(
                 |(_pname, ptype)| ctx.types.get_type(Some(ptype))
             ).collect::<Result<Vec<*mut llvm::LLVMType>, GenError>>()?;
 
             unsafe {
-                // TODO: consider not passing the name of the function to LLVM, so that it's anonymous
-                // and we don't get conflicts with functions imported from C standard library
-
                 let llvm_fn_type = llvm::core::LLVMFunctionType(return_type, param_types.as_mut_ptr(), param_types.len() as u32, 0);
-                let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, cstr.as_ptr(), llvm_fn_type);
+                let llvm_fn_value = llvm::core::LLVMAddFunction(
+                    ctx.module,
+                    if self.name == "main" {
+                        b"main\0" as *const u8 as *const i8
+                    } else {
+                        ANON // if this is not the main function, we don't give it a name, because we don't want conflicts with standard library functions (like printf)
+                    }, 
+                    llvm_fn_type
+                );
                 let my_symbol = TypedSymbol {
                     llvm_type: llvm_fn_type,
                     llvm_value: llvm_fn_value,
