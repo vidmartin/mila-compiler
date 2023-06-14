@@ -10,6 +10,7 @@ pub enum StatementNode {
     WhileLoop(WhileLoopNode),
     IfStatement(IfStatementNode),
     Exit,
+    Break,
 }
 
 #[derive(Clone)]

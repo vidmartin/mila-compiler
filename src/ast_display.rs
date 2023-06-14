@@ -170,6 +170,9 @@ impl fmt::Display for ast::StatementNode {
             },
             ast::StatementNode::Exit => {
                 writeln!(f, "exit")?;
+            },
+            ast::StatementNode::Break => {
+                writeln!(f, "break")?;
             }
         }
 

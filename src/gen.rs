@@ -537,7 +537,8 @@ impl CodeGen<bool> for ast::StatementNode {
                 }
                 // we return false after terminaning instructions to tell the caller that they cant use this basic block anymore
                 return Ok(false);
-            }
+            },
+            ast::StatementNode::Break => todo!(),
         }
     }
 }

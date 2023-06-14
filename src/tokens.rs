@@ -131,6 +131,8 @@ pub enum Token {
     /// the "," token
     /// used to separate variable names
     TkComma,
+    // the "break" keyword
+    KwBreak,
 
     /// any valid identifier that is not also a keyword
     /// might refer to a function, variable, constant, data type, ...
@@ -176,6 +178,7 @@ pub fn parse_kw(s: &str) -> Option<Token> {
             "and"       => Token::KwAnd,
             "not"       => Token::KwNot,
             "forward"   => Token::KwForward,
+            "break"     => Token::KwBreak,
             _           => None?
         }
     )
