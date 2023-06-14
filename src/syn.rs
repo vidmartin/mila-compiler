@@ -1,7 +1,6 @@
 
 use crate::tokens::*;
 use crate::ast::*;
-use std::collections::btree_map::Range;
 use std::iter::Peekable;
 
 #[derive(Debug)]
@@ -27,7 +26,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Self { lex: lex, unlex: Vec::new(), }
     }
 
-    fn debug_print(&mut self, s: &str) {
+    fn debug_print(&mut self, _s: &str) {
         // if let Some(tok) = self.peek() {
         //     println!("{}, {}", s, tok);
         // } else {

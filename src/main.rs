@@ -10,58 +10,7 @@ mod args;
 use std::io::{stdin, Read};
 use clap::Parser;
 
-use llvm_sys;
-
 use crate::gen::CodeGen;
-
-fn llvm_test() {
-    unsafe {
-        println!("LLVMContextCreate()");
-        let context = llvm_sys::core::LLVMContextCreate();
-        println!("LLVMModuleCreateWithName(...)");
-        let module = llvm_sys::core::LLVMModuleCreateWithName(b"TestModule\0".as_ptr() as *const i8);
-        println!("LLVMCreateBuilderInContext(...)");
-        let builder = llvm_sys::core::LLVMCreateBuilderInContext(context);
-
-        println!("LLVMInt32Type()");
-        let i32t = llvm_sys::core::LLVMInt32Type();
-        
-        println!("LLVMFunctionType(...)");
-        let fntype_i32 = llvm_sys::core::LLVMFunctionType(
-            i32t, std::ptr::null_mut(), 0, 0
-        );
-
-        println!("LLVMAddFunction(...)");
-        let fn_main = llvm_sys::core::LLVMAddFunction(
-            module,
-            b"main\0".as_ptr() as *const i8,
-            fntype_i32
-        );
-
-        println!("LLVMAppendBasicBlockInContext(...)");
-        let fn_main_bb1 = llvm_sys::core::LLVMAppendBasicBlockInContext(context, fn_main, b"\0".as_ptr() as *const i8);
-        println!("LLVMPositionBuilderAtEnd(...)");
-        llvm_sys::core::LLVMPositionBuilderAtEnd(builder, fn_main_bb1);
-        println!("LLVMConstInt(...)");
-        let i32v1234 = llvm_sys::core::LLVMConstInt(i32t, 12, 0);
-        println!("LLVMBuildRet(...)");
-        let iret = llvm_sys::core::LLVMBuildRet(
-            builder, i32v1234
-        );
-
-        println!("LLVMDumpModule(...)");
-        let mut errmsg: *mut std::ffi::c_char = std::ptr::null_mut();
-        if llvm_sys::core::LLVMPrintModuleToFile(module, b"./test.ll\0".as_ptr() as *const i8, &mut errmsg as *mut *mut std::ffi::c_char) == 0 {
-            println!(" -> output written successfully :)");
-        } else {
-            println!(" -> error happened! {}", std::ffi::CStr::from_ptr(errmsg).to_str().unwrap());
-        }
-
-        llvm_sys::core::LLVMDisposeBuilder(builder);
-        llvm_sys::core::LLVMDisposeModule(module);
-        llvm_sys::core::LLVMContextDispose(context);
-    }
-}
 
 fn main() {
     let args = args::Args::parse();

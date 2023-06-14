@@ -1,5 +1,4 @@
 
-use llvm::core::LLVMBuildCondBr;
 use llvm_sys as llvm;
 use crate::ast;
 
@@ -29,6 +28,7 @@ impl GenError {
     }
 }
 
+#[allow(unused)]
 pub struct LlvmTypes {
     i64: *mut llvm::LLVMType,
     i32: *mut llvm::LLVMType,
@@ -591,7 +591,7 @@ pub fn fetch_string_literal(ctx: &mut GenContext, string: &str) -> Result<*mut l
 }
 
 impl CodeGen<*mut llvm::LLVMValue> for ast::LiteralNode {
-    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+    fn gen(&self, ctx: &mut GenContext, _scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         unsafe {
             match self {
                 ast::LiteralNode::Integer(integer) => {
@@ -605,7 +605,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::LiteralNode {
     }
 }
 
-pub fn find_storage(ctx: &mut GenContext, scope: &Scope, varname: &str) -> Result<TypedSymbol, GenError> {
+pub fn find_storage(_ctx: &mut GenContext, scope: &Scope, varname: &str) -> Result<TypedSymbol, GenError> {
     if let Some(cctx) = scope.get_callable_context() {
         if varname == cctx.callable_name {
             if let Some(retstore) = &cctx.return_store {
