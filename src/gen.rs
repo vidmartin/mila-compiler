@@ -1,4 +1,5 @@
 
+use llvm::core::LLVMBuildCondBr;
 use llvm_sys as llvm;
 use crate::ast;
 
@@ -813,7 +814,49 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
 
 impl CodeGen<()> for ast::ForLoopNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<(), GenError> {
-        todo!()
+        // we're ignoring all attributes of self.iterating except self.iterating.name! this is quite ugly ngl
+
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+        let llvm_fn_value = scope.callable_context.as_ref().ok_or_else(|| GenError::InvalidScope.panic_or_dont())?.callable.llvm_value;
+
+        unsafe {
+            let iterref = llvm::core::LLVMBuildAlloca(ctx.builder, ctx.types.i64, ANON);
+            let varref = llvm::core::LLVMBuildAlloca(ctx.builder, ctx.types.i64, ANON);
+
+            let initval = self.range.lhs.gen(ctx, Some(&mut scope))?;
+            let endval = self.range.rhs.gen(ctx, Some(&mut scope))?;
+            let stepval = llvm::core::LLVMConstInt(ctx.types.i64, *(&self.range.step as *const i64 as *const u64), 0);
+
+            // varref will be the only one of the three above that will be accessible in mila source code
+            let mut inner_scope = scope.sub();
+            inner_scope.set(&self.iterating.name, TypedSymbol { llvm_value: varref, llvm_type: ctx.types.i64 })?;
+
+            llvm::core::LLVMBuildStore(ctx.builder, initval, iterref);
+
+            let inner_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
+            let rest_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
+
+            llvm::core::LLVMBuildBr(ctx.builder, inner_block);
+
+            // BEGIN INNER BLOCK
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, inner_block);
+
+            let iterval = llvm::core::LLVMBuildLoad2(ctx.builder, ctx.types.i64, iterref, ANON);
+            llvm::core::LLVMBuildStore(ctx.builder, iterval, varref); // store iteration value to user accessible variable
+
+            if self.inner.gen(ctx, Some(&mut inner_scope))? {
+                let iterval = llvm::core::LLVMBuildLoad2(ctx.builder, ctx.types.i64, iterref, ANON);
+                let iterval = llvm::core::LLVMBuildAdd(ctx.builder, stepval, iterval, ANON);
+                llvm::core::LLVMBuildStore(ctx.builder, iterval, iterref);
+                let cmpres = llvm::core::LLVMBuildICmp(ctx.builder, llvm::LLVMIntPredicate::LLVMIntSGT, iterval, endval, ANON);
+                llvm::core::LLVMBuildCondBr(ctx.builder, cmpres, rest_block, inner_block);
+            }
+            // } END INNER BLOCK
+            
+            llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, rest_block);
+        }
+
+        return Ok(());
     }
 }
 

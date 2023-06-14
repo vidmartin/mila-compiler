@@ -1,9 +1,11 @@
 program forCycle;
 
 function factorial(n: integer): integer;
+var m: integer;
 begin
-    factorial := 1;
-    for i := 1 to n do factorial := factorial * i;
+    m := 1;
+    for i := 1 to n do m := m * i;
+    factorial := m;
 end;
 
 var n: integer;
