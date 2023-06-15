@@ -1,0 +1,92 @@
+program convolution;
+
+var 
+    img: array [0 .. 7] of array [0 .. 7] of integer;
+    kernel: array [0 .. 2] of array [0 .. 2] of integer;
+    result: array [1 .. 6] of array [1 .. 6] of integer;
+
+procedure printImg();
+begin
+    for i := 0 to 7 do
+    begin
+        for j := 0 to 7 do
+        begin
+            if img[i][j] < 10 then write('0');
+            write(img[i][j]);
+            write(' ');
+        end;
+        writeln('');
+    end;
+end;
+
+function readKernel(): integer;
+var temp: integer;
+begin
+    for i := 0 to 2 do
+        for j := 0 to 2 do
+        begin
+            write('kernel[');
+            write(i);
+            write('][');
+            write(j);
+            write('] := ');
+            if not readln(temp) then
+            begin
+                readKernel := 0;
+                exit;
+            end;
+            kernel[i][j] := temp;
+        end;
+    readKernel := 1;
+end;
+
+procedure convolve();
+begin
+    for i := 1 to 6 do
+        for j := 1 to 6 do
+            result[i][j] := 
+                img[i - 1][j - 1] * kernel[0][0] +
+                img[i - 1][j    ] * kernel[0][1] +
+                img[i - 1][j + 1] * kernel[0][2] +
+                img[i    ][j - 1] * kernel[1][0] +
+                img[i    ][j    ] * kernel[1][1] +
+                img[i    ][j + 1] * kernel[1][2] +
+                img[i + 1][j - 1] * kernel[2][0] +
+                img[i + 1][j    ] * kernel[2][1] +
+                img[i + 1][j + 1] * kernel[2][2];
+end;
+
+procedure printResult();
+begin
+    for i := 1 to 6 do
+    begin
+        for j := 1 to 6 do
+        begin
+            write(result[i][j]);
+            write(' ');
+        end;
+        writeln('');
+    end;
+end;
+
+begin
+    for i := 0 to 7 do
+        for j := 0 to 7 do
+            img[i][j] := i * 8 + j;
+
+    writeln('original image:');
+    printImg();
+    writeln('');
+
+    if not readKernel() then
+    begin
+        writeln('invalid input');
+        exit;
+    end;
+
+    writeln('');
+
+    convolve();
+    writeln('result image:');
+    printResult();
+end.

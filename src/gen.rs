@@ -1,7 +1,15 @@
 
-use llvm::core::LLVMBuildSwitch;
 use llvm_sys as llvm;
 use crate::ast;
+
+#[allow(unused)]
+fn llvm_type_to_string(llvm_type: *mut llvm::LLVMType) -> String {
+    unsafe {
+        let string = llvm::core::LLVMPrintTypeToString(llvm_type);
+        let string = std::ffi::CString::from_raw(string);
+        return string.to_str().unwrap().to_string();
+    }
+}
 
 #[derive(Debug)]
 pub enum GenError {
@@ -17,12 +25,13 @@ pub enum GenError {
     InvalidMacroUsage,
     MissingCFunction,
     InvalidAssignment,
+    NotImplemented(String),
 }
 
 impl GenError {
     pub fn panic_or_dont(self) -> Self {
         match &self {
-            // GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
+            GenError::TypeMismatch => panic!("GenError: {:?}", &self),
             _ => {},
         }
         return self;
@@ -62,8 +71,25 @@ impl LlvmTypes {
                 }
             },
             Some(ast::DataType::OneInternal(dtype)) => Ok(*dtype),
-            Some(ast::DataType::Array { item, from, to }) => todo!(),
+            Some(ast::DataType::Array { item, from, to }) => unsafe {
+                Ok(llvm::core::LLVMArrayType(self.get_type(Some(item.as_ref()))?, (to - from + 1) as u32))
+            },
             None => Ok(self.void),
+        }
+    }
+
+    pub fn get_default_value(&self, dtype: &ast::DataType) -> Result<*mut llvm::LLVMValue, GenError> {
+        match dtype {
+            ast::DataType::OneInternal(_) | ast::DataType::One(_) => unsafe {
+                Ok(llvm::core::LLVMConstInt(self.i64, 0, 0))
+            },
+            ast::DataType::Array { item, from, to } => unsafe {
+                let mut vals: Vec<*mut llvm::LLVMValue> = Vec::new();
+                for _ in *from..=*to {
+                    vals.push(self.get_default_value(item.as_ref())?);
+                }
+                Ok(llvm::core::LLVMConstArray(self.get_type(Some(item))?, vals.as_mut_ptr(), vals.len() as u32))
+            },
         }
     }
 }
@@ -100,6 +126,7 @@ pub fn gen_printf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -112,6 +139,7 @@ pub fn gen_scanf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -123,6 +151,7 @@ pub fn gen_getchar(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -199,6 +228,7 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol, getchar: &TypedSymb
         Ok(TypedSymbol {
             llvm_type: llvm_readln_fn_type,
             llvm_value: llvm_readln_fn_value,
+            dtype: None,
         })
     }
 }
@@ -207,13 +237,14 @@ pub struct CallableContext {
     callable_name: String,
     callable: TypedSymbol,
     return_store: Option<TypedSymbol>,
-    params: Vec<(String, *mut llvm::LLVMType)>,
+    params: Vec<(String, *mut llvm::LLVMType, Option<ast::DataType>)>,
 }
 
 #[derive(Clone)]
 pub struct TypedSymbol {
     llvm_value: *mut llvm::LLVMValue,
     llvm_type: *mut llvm::LLVMType,
+    dtype: Option<ast::DataType>,
 }
 
 pub struct Scope<'a> {
@@ -358,8 +389,7 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &ast:
                 init.gen(ctx, Some(global_scope))?
             } else {
                 // if we don't set initializer, llc command will ignore it
-                // TODO: more robust default value providers
-                llvm::core::LLVMConstInt(llvm_type, 0, 0)
+                ctx.types.get_default_value(&storage.dtype)?
             }
         ); 
 
@@ -367,7 +397,8 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &ast:
             &storage.name,
             TypedSymbol {
                 llvm_value: llvm_value,
-                llvm_type: llvm_type
+                llvm_type: llvm_type,
+                dtype: Some(storage.dtype.clone()),
             }
         )?;
 
@@ -453,6 +484,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 let my_symbol = TypedSymbol {
                     llvm_type: llvm_fn_type,
                     llvm_value: llvm_fn_value,
+                    dtype: None,
                 };
                 scope.set(&self.name, my_symbol.clone())?;
                 my_symbol
@@ -472,8 +504,10 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
             let mut inner_scope = scope.sub();
             let params = self.params.iter().map(
-                |(pname, ptype)| ctx.types.get_type(Some(ptype)).map(|llvm_type| (pname.to_owned(), llvm_type))
-            ).collect::<Result<Vec<(String, *mut llvm::LLVMType)>, GenError>>()?;
+                |(pname, ptype)| ctx.types.get_type(Some(ptype)).map(
+                    |llvm_type| (pname.to_owned(), llvm_type, Some(ptype.clone()))
+                )
+            ).collect::<Result<Vec<_>, GenError>>()?;
 
             unsafe {
                 let bb = llvm::core::LLVMAppendBasicBlockInContext(
@@ -501,6 +535,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                         return_store: Some(TypedSymbol {
                             llvm_value: llvm_value,
                             llvm_type: llvm_type,
+                            dtype: Some(ret_type.clone()),
                         }),
                         params: params,
                     });
@@ -538,15 +573,16 @@ impl CodeGen<bool> for ast::CallableImplementationNode {
 
         unsafe {
             // allocate local variables for parameters and copy them
-            for (i, (pname, ptype)) in params.iter().enumerate() {
-                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, *ptype, ANON);
+            for (i, (pname, ptype_llvm, ptype_ast)) in params.iter().enumerate() {
+                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, *ptype_llvm, ANON);
                 let llvm_param = llvm::core::LLVMGetParam(callable.llvm_value, i as u32);
                 llvm::core::LLVMBuildStore(ctx.builder, llvm_param, llvm_place);
                 scope.set(
                     pname,
                     TypedSymbol {
-                        llvm_type: *ptype,
+                        llvm_type: *ptype_llvm,
                         llvm_value: llvm_place,
+                        dtype: ptype_ast.clone(),
                     }
                 )?;
             }
@@ -561,6 +597,7 @@ impl CodeGen<bool> for ast::CallableImplementationNode {
                     TypedSymbol {
                         llvm_type: llvm_type,
                         llvm_value: llvm_place,
+                        dtype: Some(local.dtype.clone()),
                     }
                 )?;
             }
@@ -642,7 +679,26 @@ impl CodeGen<()> for ast::AssignmentNode {
                 }
                 Ok(())
             },
-            ast::ExpressionNode::ArrayAccess(_) => todo!(),
+            ast::ExpressionNode::ArrayAccess(node) => {
+                let rhs = self.value.gen(ctx, Some(&mut scope))?;
+                let storage = node.gen(ctx, Some(&mut scope))?;
+
+                unsafe {
+                    // let strlit = fetch_string_literal(ctx, "storing to %ld\n")?;
+                    // let mut params = vec![strlit, storage];
+                    // llvm::core::LLVMBuildCall2(
+                    //     ctx.builder,
+                    //     scope.c_functions.printf.as_ref().unwrap().llvm_type,
+                    //     scope.c_functions.printf.as_ref().unwrap().llvm_value,
+                    //     params.as_mut_ptr(),
+                    //     2u32,
+                    //     ANON
+                    // );
+
+                    llvm::core::LLVMBuildStore(ctx.builder, rhs, storage);
+                }
+                Ok(())
+            },
             _ => Err(GenError::InvalidAssignment.panic_or_dont())
         }
     }
@@ -698,7 +754,38 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
         match self {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
-            ast::ExpressionNode::ArrayAccess(node) => todo!(),
+            ast::ExpressionNode::ArrayAccess(node) => unsafe {
+                let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+
+                let llvm_ptr = node.gen(ctx, Some(&mut scope))?; // this is probably pointer, so we need to add a load instruction
+
+                // this silly code is for getting the type of the element:
+                let llvm_el_type = if let ast::ExpressionNode::Access(name) = node.unravel()?.0 {
+                    let symbol = scope.get(name).ok_or_else(|| GenError::UndefinedSymbol(name.clone()))?;
+                    if let Some(mut dtype) = symbol.dtype.as_ref() {
+                        loop {
+                            match dtype {
+                                ast::DataType::Array { item, from: _, to: _ } => {
+                                    dtype = item.as_ref();
+                                },
+                                _ => break ctx.types.get_type(Some(dtype))?,
+                            }
+                        }  
+                    } else {
+                        return Err(GenError::TypeMismatch.panic_or_dont());
+                    }
+                } else {
+                    return Err(GenError::TypeMismatch.panic_or_dont());
+                };
+
+                let llvm_val = llvm::core::LLVMBuildLoad2(
+                    ctx.builder,
+                    llvm_el_type,
+                    llvm_ptr,
+                    ANON
+                );
+                Ok(llvm_val)
+            },
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
@@ -743,7 +830,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
             return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
         }
     }
-
+    
     let param = pseudocall.params[0].gen(ctx, Some(scope))?; // evaluate param
     unsafe {
         if llvm::core::LLVMTypeOf(param) != ctx.types.i64 {
@@ -777,7 +864,7 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
         ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(
             || GenError::UndefinedSymbol(name.clone()).panic_or_dont()
         )?.llvm_value,
-        ast::ExpressionNode::ArrayAccess(_) => todo!(),
+        ast::ExpressionNode::ArrayAccess(node) => node.gen(ctx, Some(scope))?,
         _ => Err(GenError::InvalidMacroUsage.panic_or_dont())?,
     };
 
@@ -861,6 +948,74 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     }
 }
 
+impl ast::ArrayAccessNode {
+    /// unravels nested array access
+    pub fn unravel(&self) -> Result<(&ast::ExpressionNode, Vec<&ast::ExpressionNode>), GenError> {
+        let mut indexers: Vec<&ast::ExpressionNode> = vec![ self.index.as_ref() ];
+        let mut array = self.array.as_ref();
+
+        loop {
+            match array {
+                ast::ExpressionNode::ArrayAccess(node) => {
+                    array = &node.array;
+                    indexers.push(node.index.as_ref());
+                },
+                _ => {
+                    indexers.reverse();
+                    return Ok((array, indexers));
+                },
+            }
+        }
+    }
+}
+
+impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope)?;
+        let (array, indexers) = self.unravel()?;
+
+        let array = match array {
+            ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(|| GenError::UndefinedSymbol(name.clone()))?,
+            _ => return Err(GenError::NotImplemented("array expressions".to_owned()).panic_or_dont()),
+        };
+
+        unsafe {
+            let mut llvm_indexers: Vec<*mut llvm::LLVMValue> = vec![
+                llvm::core::LLVMConstInt(ctx.types.i64, 0, 0),
+            ];
+            let mut curr_arr_type: Option<&ast::DataType> = array.dtype.as_ref();
+
+            for indexer in indexers.iter() {
+                if let Some(ast::DataType::Array { item, from, to: _ }) = curr_arr_type {
+                    curr_arr_type = Some(item.as_ref());
+
+                    let llvm_index = indexer.gen(ctx, Some(&mut scope))?;
+                    let llvm_index = llvm::core::LLVMBuildSub(
+                        ctx.builder,
+                        llvm_index,
+                        llvm::core::LLVMConstInt(ctx.types.i64, *(from as *const i64 as *const u64), 0),
+                        ANON
+                    );
+                    llvm_indexers.push(llvm_index);
+                } else {
+                    return Err(GenError::TypeMismatch.panic_or_dont());
+                }
+            }
+
+            let llvm_ptr = llvm::core::LLVMBuildGEP2(
+                ctx.builder,
+                array.llvm_type,
+                array.llvm_value,
+                llvm_indexers.as_mut_ptr(),
+                llvm_indexers.len() as u32,
+                ANON
+            );
+
+            return Ok(llvm_ptr);
+        }
+    }
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         let mut scope = scope.ok_or_else(|| GenError::InvalidContext.panic_or_dont())?;
@@ -920,7 +1075,11 @@ impl CodeGen<()> for ast::ForLoopNode {
 
             // varref will be the only one of the three above that will be accessible in mila source code
             let mut inner_scope = scope.sub();
-            inner_scope.set(&self.iterating.name, TypedSymbol { llvm_value: varref, llvm_type: ctx.types.i64 })?;
+            inner_scope.set(&self.iterating.name, TypedSymbol {
+                llvm_value: varref,
+                llvm_type: ctx.types.i64,
+                dtype: Some(ast::DataType::One("integer".to_owned())),
+            })?;
             inner_scope.break_target = Some(rest_block);
 
             // BEGIN INNER BLOCK
