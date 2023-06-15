@@ -682,7 +682,19 @@ impl CodeGen<()> for ast::AssignmentNode {
             ast::ExpressionNode::ArrayAccess(node) => {
                 let rhs = self.value.gen(ctx, Some(&mut scope))?;
                 let storage = node.gen(ctx, Some(&mut scope))?;
+
                 unsafe {
+                    // let strlit = fetch_string_literal(ctx, "storing to %ld\n")?;
+                    // let mut params = vec![strlit, storage];
+                    // llvm::core::LLVMBuildCall2(
+                    //     ctx.builder,
+                    //     scope.c_functions.printf.as_ref().unwrap().llvm_type,
+                    //     scope.c_functions.printf.as_ref().unwrap().llvm_value,
+                    //     params.as_mut_ptr(),
+                    //     2u32,
+                    //     ANON
+                    // );
+
                     llvm::core::LLVMBuildStore(ctx.builder, rhs, storage);
                 }
                 Ok(())
@@ -967,7 +979,9 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
         };
 
         unsafe {
-            let mut llvm_indexers: Vec<*mut llvm::LLVMValue> = Vec::new();
+            let mut llvm_indexers: Vec<*mut llvm::LLVMValue> = vec![
+                llvm::core::LLVMConstInt(ctx.types.i64, 0, 0),
+            ];
             let mut curr_arr_type: Option<&ast::DataType> = array.dtype.as_ref();
 
             for indexer in indexers.iter() {
