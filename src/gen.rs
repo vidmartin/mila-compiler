@@ -1,4 +1,5 @@
 
+use llvm::core::LLVMBuildSwitch;
 use llvm_sys as llvm;
 use crate::ast;
 
@@ -72,6 +73,7 @@ pub struct BuiltInFunctions {
     // C standard library:
     printf: Option<TypedSymbol>,
     scanf: Option<TypedSymbol>,
+    getchar: Option<TypedSymbol>,
 
     // hard-coded implementations:
     readln: Option<TypedSymbol>,
@@ -80,6 +82,7 @@ pub struct BuiltInFunctions {
 const C_FUNCTIONS_DEFAULT: BuiltInFunctions = BuiltInFunctions {
     printf: None,
     scanf: None,
+    getchar: None,
     readln: None,
 };
 
@@ -113,9 +116,20 @@ pub fn gen_scanf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
     }
 }
 
+pub fn gen_getchar(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
+    unsafe {
+        let llvm_fn_type = llvm::core::LLVMFunctionType(ctx.types.i32, std::ptr::null_mut(), 0, 0);
+        let llvm_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"getchar\0".as_ptr() as *const i8, llvm_fn_type);
+        return Ok(TypedSymbol {
+            llvm_type: llvm_fn_type,
+            llvm_value: llvm_fn_value,
+        });
+    }
+}
+
 const ANON: *const i8 = b"\0".as_ptr() as *const i8;
 
-pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymbol, GenError> {
+pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol, getchar: &TypedSymbol) -> Result<TypedSymbol, GenError> {
     // hard coded implementation for readln functionality
 
     unsafe {
@@ -123,9 +137,12 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
         let llvm_readln_fn_type = llvm::core::LLVMFunctionType(ctx.types.i64, (&mut i64ptr) as *mut *mut llvm::LLVMType, 1, 1);
         let llvm_readln_fn_value = llvm::core::LLVMAddFunction(ctx.module, b"readln\0".as_ptr() as *const i8, llvm_readln_fn_type);
         
-        let bb = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, ANON);
-        llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb);
-
+        let bb_scanf = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, ANON);
+        let bb_clear = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, ANON);
+        let bb_rest = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_readln_fn_value, ANON);
+        
+        // BASIC BLOCK CONTAINING SCANF:
+        llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb_scanf);
         let llvm_ptr = llvm::core::LLVMGetParam(llvm_readln_fn_value, 0);
         
         let mut scanf_params = vec![fetch_string_literal(ctx, "%ld")?, llvm_ptr];
@@ -147,6 +164,34 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol) -> Result<TypedSymb
             ANON
         );
 
+        llvm::core::LLVMBuildBr(ctx.builder, bb_clear);
+        
+        // BASIC BLOCK THAT CLEARS INPUT BUFFER:
+        llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb_clear);
+
+        let llvm_getchar_retval = llvm::core::LLVMBuildCall2(
+            ctx.builder,
+            getchar.llvm_type,
+            getchar.llvm_value,
+            std::ptr::null_mut(),
+            0,
+            ANON
+        );
+
+        let llvm_switch = llvm::core::LLVMBuildSwitch(ctx.builder, llvm_getchar_retval, bb_clear, 2);
+        llvm::core::LLVMAddCase(
+            llvm_switch,
+            llvm::core::LLVMConstInt(ctx.types.i32, *(&-1i64 as *const i64 as *const u64), 0), // EOF
+            bb_rest
+        );
+        llvm::core::LLVMAddCase(
+            llvm_switch,
+            llvm::core::LLVMConstInt(ctx.types.i32, 10u64, 0), // newline
+            bb_rest
+        );
+
+        // BASIC BLOCK THAT RETURNS:
+        llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, bb_rest);
         let llvm_cast = llvm::core::LLVMBuildSExt(ctx.builder, llvm_ge0_val, ctx.types.i64, ANON);
 
         llvm::core::LLVMBuildRet(ctx.builder, llvm_cast);
@@ -349,7 +394,10 @@ impl CodeGen<()> for ast::ProgramNode {
         let mut c_functions = BuiltInFunctions::new();
         c_functions.printf = Some(gen_printf(ctx)?);
         c_functions.scanf = Some(gen_scanf(ctx)?);
-        c_functions.readln = Some(gen_readln(ctx, c_functions.scanf.as_ref().unwrap())?);
+        c_functions.getchar = Some(gen_getchar(ctx)?);
+        c_functions.readln = Some(
+            gen_readln(ctx, c_functions.scanf.as_ref().unwrap(), c_functions.getchar.as_ref().unwrap())?
+        );
 
         let mut global_scope = Scope::new();
         global_scope.c_functions = &c_functions;
