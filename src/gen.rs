@@ -554,7 +554,7 @@ impl CodeGen<bool> for ast::StatementNode {
             },
             ast::StatementNode::Break => unsafe {
                 let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
-                let break_target = match scope.break_target {
+                let break_target = match scope.get_break_target() {
                     Some(bt) => bt,
                     None => return Err(GenError::InvalidScope.panic_or_dont()),
                 };
