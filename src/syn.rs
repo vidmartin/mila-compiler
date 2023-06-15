@@ -804,9 +804,9 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwNot) => {
                 self.expect_token(&Token::KwNot)?;
 
-                // this is a hack for implementing the 'not' operator: disguised <> operator
+                // this is a hack for implementing the 'not' operator: disguised = operator
                 Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
-                    kind: BinaryOperatorKind::Ne,
+                    kind: BinaryOperatorKind::Eq,
                     lhs: Box::new(ExpressionNode::Literal(LiteralNode::Integer(0))),
                     rhs: Box::new(self.parse_e2()?),
                 }))
