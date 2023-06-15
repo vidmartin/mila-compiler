@@ -14,6 +14,12 @@ pub enum SyntaxError {
     ImplementationError,
 }
 
+impl SyntaxError {
+    pub fn panic_or_dont(self) -> Self {
+        self
+    }
+}
+
 pub type ParseResult<TNode> = Result<TNode, SyntaxError>;
 
 pub struct Parser<'a, TLex : Iterator<Item = Token>> {
@@ -57,10 +63,10 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     Err(SyntaxError::Expected {
                         expected: token.clone(),
                         gotten: tok,
-                    })
+                    }.panic_or_dont())
                 }
             },
-            None => Err(SyntaxError::UnexpectedEnd),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -80,8 +86,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::Ident(s)) => Ok(s),
             Some(tok) => Err(SyntaxError::ExpectedIdentifier {
                 gotten: tok,
-            }),
-            None => Err(SyntaxError::UnexpectedEnd),
+            }.panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -90,8 +96,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::LitInt(i)) => Ok(i),
             Some(tok) => Err(SyntaxError::ExpectedIntLiteral {
                 gotten: tok,
-            }),
-            None => Err(SyntaxError::UnexpectedEnd),
+            }.panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -100,8 +106,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::LitStr(s)) => Ok(s),
             Some(tok) => Err(SyntaxError::ExpectedStrLiteral {
                 gotten: tok,
-            }),
-            None => Err(SyntaxError::UnexpectedEnd),
+            }.panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -173,8 +179,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     callables: Vec::new()
                 })
             }
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -186,8 +192,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
             Some(Token::KwProcedure) => Ok(Declaration::Procedure(self.parse_procedure()?)),
             Some(Token::KwConst) => Ok(Declaration::Constants(self.parse_constants()?)),
             Some(Token::KwVar) => Ok(Declaration::Variables(self.parse_variables()?)),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -262,8 +268,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
                 Ok(wip) // leave implementation at None
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -277,8 +283,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Ok(vars)
             },
             Some(Token::KwBegin) => Ok(Vec::new()),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -316,8 +322,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Ok(first)
             },
             Some(Token::TkParClose | Token::TkSemicolon) => Ok(Vec::new()),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -350,8 +356,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 }
             },
             Some(Token::TkParClose) => Ok(Vec::new()),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -387,8 +393,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 more_names.insert(0, first_name);
                 Ok(more_names)
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -413,8 +419,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                     item: Box::new(item),
                 })
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -451,8 +457,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 more_stmts.insert(0, first_stmt);
                 Ok(more_stmts)
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -463,8 +469,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::TkSemicolon)?;
                 Ok(self.parse_statements()?)
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -493,8 +499,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&Token::KwBreak)?;
                 Ok(StatementNode::Break)
             }
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -552,8 +558,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwEnd |
                 Token::KwElse
             ) => Ok(None),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -576,8 +582,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 more_params.insert(0, first_param);
                 Ok(more_params)
             }
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -593,8 +599,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 more_params.insert(0, first_param);
                 Ok(more_params)
             },
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -666,8 +672,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Ok(Some(self.parse_e0()?))
             },
             Some(Token::TkSemicolon | Token::KwElse | Token::KwEnd) => Ok(None),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -686,7 +692,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e0()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -725,8 +731,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -745,7 +751,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e1()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -785,8 +791,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -812,8 +818,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::LitInt(_) |
                 Token::LitStr(_)
             ) => Ok(self.parse_e3()?),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -833,7 +839,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&op)?;
 
                 let rhs = self.parse_e4()?;
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
 
                 Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
                     kind: opkind,
@@ -856,8 +862,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs), 
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -876,7 +882,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e4()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -923,8 +929,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -943,7 +949,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e5()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -992,8 +998,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -1005,7 +1011,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError))?;
+                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
 
                 // hack for implementing unary + / - :
                 Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -1020,8 +1026,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::LitInt(_) |
                 Token::LitStr(_)
             ) => Ok(self.parse_e7()?),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -1044,8 +1050,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let s = self.expect_str_lit()?;
                 ExpressionNode::Literal(LiteralNode::String(s))
             }
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()))?,
-            None => Err(SyntaxError::UnexpectedEnd)?,
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont())?,
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont())?,
         };
 
         Ok(self.parse_more_e7(expr)?)
@@ -1090,8 +1096,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 Token::KwDownto |
                 Token::KwEnd
             ) => Ok(lhs),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 
@@ -1128,8 +1134,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
 
         let op = match self.peek() {
             Some(tok @ (Token::KwTo | Token::KwDownto)) => tok.clone(),
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()))?,
-            None => Err(SyntaxError::UnexpectedEnd)?,
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont())?,
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont())?,
         };
 
         self.expect_token(&op)?;
@@ -1138,7 +1144,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         Ok(RangeNode {
             lhs: lhs,
             rhs: rhs,
-            step: if op == Token::KwTo { 1 } else if op == Token::KwDownto { -1 } else { Err(SyntaxError::ImplementationError)? }
+            step: if op == Token::KwTo { 1 } else if op == Token::KwDownto { -1 } else { Err(SyntaxError::ImplementationError.panic_or_dont())? }
         })
     }
 
@@ -1164,8 +1170,8 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
         match self.peek() {
             Some(Token::TkSemicolon | Token::KwEnd) => Ok(None),
             Some(Token::KwElse) => Ok(Some(self.parse_else()?)), // hack for first-follow conflict
-            Some(tok) => Err(SyntaxError::Unexpected(tok.clone())),
-            None => Err(SyntaxError::UnexpectedEnd),
+            Some(tok) => Err(SyntaxError::Unexpected(tok.clone()).panic_or_dont()),
+            None => Err(SyntaxError::UnexpectedEnd.panic_or_dont()),
         }
     }
 

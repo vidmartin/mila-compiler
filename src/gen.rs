@@ -20,10 +20,10 @@ pub enum GenError {
 
 impl GenError {
     pub fn panic_or_dont(self) -> Self {
-        // match &self {
-        //     GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
-        //     _ => {},
-        // }
+        match &self {
+            // GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
+            _ => {},
+        }
         return self;
     }
 }
