@@ -29,6 +29,16 @@ The following features of the Mila language were implemented:
 - arrays (can be multidimensional!)
 - direct & indirect recursion 
 
+## Sample files
+
+I added some extra sample files:
+
+- `convolution.mila`
+- `factorialFor.mila` 
+- `fibbDiv.mila`
+- `nestedWhile.mila`
+- `password.mila`
+
 ## Story and remarks
 
 I first guessed the grammar for the Mila language and then converted it to (almost) LL(1). The resulting grammar is in the `grammar.txt` file. I then used [the tool](https://pages.fit.cvut.cz/peckato1/parsingtbl/) to generate a parsing table, which I hard-coded into my compiler.
