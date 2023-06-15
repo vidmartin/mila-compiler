@@ -1,0 +1,26 @@
+program nestedWhile;
+
+var m: integer;
+
+begin
+    while 1 do
+    begin
+        writeln('(1) exit, (2) say hello');
+
+        while 1 do
+        begin
+            if not readln(m) then writeln('that is not a number')
+            else if m = 1 then 
+            begin
+                writeln('ok, I\'m exiting');
+                exit;
+            end
+            else if m = 2 then
+            begin
+                writeln('Hello!');
+                break;
+            end
+            else writeln('unrecognized option.');
+        end;
+    end;
+end.
