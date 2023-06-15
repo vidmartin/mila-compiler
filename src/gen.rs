@@ -1070,8 +1070,15 @@ impl CodeGen<()> for ast::ForLoopNode {
 
             let inner_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
             let rest_block = llvm::core::LLVMAppendBasicBlockInContext(ctx.llvm_ctx, llvm_fn_value, ANON);
-
-            llvm::core::LLVMBuildBr(ctx.builder, inner_block);
+            
+            let cmpres = llvm::core::LLVMBuildICmp(
+                ctx.builder,
+                if self.range.step > 0 { llvm::LLVMIntPredicate::LLVMIntSGT } else { llvm::LLVMIntPredicate::LLVMIntSLT },
+                initval,
+                endval,
+                ANON
+            );
+            llvm::core::LLVMBuildCondBr(ctx.builder, cmpres, rest_block, inner_block);
 
             // varref will be the only one of the three above that will be accessible in mila source code
             let mut inner_scope = scope.sub();
