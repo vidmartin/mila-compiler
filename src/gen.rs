@@ -955,7 +955,7 @@ impl ast::ArrayAccessNode {
         let mut array = self.array.as_ref();
 
         loop {
-            match self.array.as_ref() {
+            match array {
                 ast::ExpressionNode::ArrayAccess(node) => {
                     array = &node.array;
                     indexers.push(node.index.as_ref());
