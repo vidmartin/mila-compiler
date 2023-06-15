@@ -1,5 +1,4 @@
 
-use llvm::core::LLVMBuildSwitch;
 use llvm_sys as llvm;
 use crate::ast;
 
@@ -17,6 +16,7 @@ pub enum GenError {
     InvalidMacroUsage,
     MissingCFunction,
     InvalidAssignment,
+    NotImplemented(String),
 }
 
 impl GenError {
@@ -875,8 +875,66 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     }
 }
 
+impl ast::ArrayAccessNode {
+    /// unravels nested array access
+    pub fn unravel(&self) -> Result<(&ast::ExpressionNode, Vec<&ast::ExpressionNode>), GenError> {
+        let mut indexers: Vec<&ast::ExpressionNode> = vec![ self.index.as_ref() ];
+        let mut array = self.array.as_ref();
+
+        loop {
+            match self.array.as_ref() {
+                ast::ExpressionNode::ArrayAccess(node) => {
+                    array = &node.array;
+                    indexers.push(node.index.as_ref());
+                },
+                _ => {
+                    return Ok((array, indexers));
+                },
+            }
+        }
+    }
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+        let mut scope = scope.ok_or_else(|| GenError::InvalidScope)?;
+        let (array, indexers) = self.unravel()?;
+
+        let array = match array {
+            ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(|| GenError::UndefinedSymbol(name.clone()))?,
+            _ => return Err(GenError::NotImplemented("array expressions".to_owned())),
+        };
+
+        unsafe {
+            let mut llvm_indexers: Vec<*mut llvm::LLVMValue> = Vec::new();
+            let mut curr_arr_type: Option<&ast::DataType> = array.dtype.as_ref();
+
+            for indexer in indexers.iter() {
+                if let Some(ast::DataType::Array { item, from, to: _ }) = curr_arr_type {
+                    curr_arr_type = Some(item.as_ref());
+
+                    let llvm_index = indexer.gen(ctx, Some(&mut scope))?;
+                    let llvm_index = llvm::core::LLVMBuildSub(
+                        ctx.builder,
+                        llvm_index,
+                        llvm::core::LLVMConstInt(ctx.types.i64, *(from as *const i64 as *const u64), 0),
+                        ANON
+                    );
+                    llvm_indexers.push(llvm_index);
+                } else {
+                    return Err(GenError::TypeMismatch);
+                }
+            }
+
+            return Ok(llvm::core::LLVMBuildGEP2(
+                ctx.builder,
+                array.llvm_type,
+                array.llvm_value,
+                llvm_indexers.as_mut_ptr(),
+                llvm_indexers.len() as u32,
+                ANON
+            ));
+        }
     }
 }
 
