@@ -961,6 +961,7 @@ impl ast::ArrayAccessNode {
                     indexers.push(node.index.as_ref());
                 },
                 _ => {
+                    indexers.reverse();
                     return Ok((array, indexers));
                 },
             }
