@@ -2,6 +2,15 @@
 use llvm_sys as llvm;
 use crate::ast;
 
+#[allow(unused)]
+fn llvm_type_to_string(llvm_type: *mut llvm::LLVMType) -> String {
+    unsafe {
+        let string = llvm::core::LLVMPrintTypeToString(llvm_type);
+        let string = std::ffi::CString::from_raw(string);
+        return string.to_str().unwrap().to_string();
+    }
+}
+
 #[derive(Debug)]
 pub enum GenError {
     MissingModule,
@@ -22,7 +31,7 @@ pub enum GenError {
 impl GenError {
     pub fn panic_or_dont(self) -> Self {
         match &self {
-            // GenError::UndefinedSymbol(_) => panic!("GenError: {:?}", &self),
+            GenError::TypeMismatch => panic!("GenError: {:?}", &self),
             _ => {},
         }
         return self;
@@ -720,10 +729,32 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::ArrayAccess(node) => unsafe {
-                let llvm_ptr = node.gen(ctx, scope)?; // this is probably pointer, so we need to add a load instruction
+                let mut scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
+
+                let llvm_ptr = node.gen(ctx, Some(&mut scope))?; // this is probably pointer, so we need to add a load instruction
+
+                // this silly code is for getting the type of the element:
+                let llvm_el_type = if let ast::ExpressionNode::Access(name) = node.unravel()?.0 {
+                    let symbol = scope.get(name).ok_or_else(|| GenError::UndefinedSymbol(name.clone()))?;
+                    if let Some(mut dtype) = symbol.dtype.as_ref() {
+                        loop {
+                            match dtype {
+                                ast::DataType::Array { item, from: _, to: _ } => {
+                                    dtype = item.as_ref();
+                                },
+                                _ => break ctx.types.get_type(Some(dtype))?,
+                            }
+                        }  
+                    } else {
+                        return Err(GenError::TypeMismatch.panic_or_dont());
+                    }
+                } else {
+                    return Err(GenError::TypeMismatch.panic_or_dont());
+                };
+
                 let llvm_val = llvm::core::LLVMBuildLoad2(
                     ctx.builder,
-                    llvm::core::LLVMGetElementType(llvm::core::LLVMTypeOf(llvm_ptr)),
+                    llvm_el_type,
                     llvm_ptr,
                     ANON
                 );
@@ -773,7 +804,7 @@ fn gen_write_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mut
             return Ok(llvm::core::LLVMConstNull(ctx.types.void)); // return void
         }
     }
-
+    
     let param = pseudocall.params[0].gen(ctx, Some(scope))?; // evaluate param
     unsafe {
         if llvm::core::LLVMTypeOf(param) != ctx.types.i64 {
@@ -918,7 +949,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
 
         let array = match array {
             ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(|| GenError::UndefinedSymbol(name.clone()))?,
-            _ => return Err(GenError::NotImplemented("array expressions".to_owned())),
+            _ => return Err(GenError::NotImplemented("array expressions".to_owned()).panic_or_dont()),
         };
 
         unsafe {
@@ -938,18 +969,20 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
                     );
                     llvm_indexers.push(llvm_index);
                 } else {
-                    return Err(GenError::TypeMismatch);
+                    return Err(GenError::TypeMismatch.panic_or_dont());
                 }
             }
 
-            return Ok(llvm::core::LLVMBuildGEP2(
+            let llvm_ptr = llvm::core::LLVMBuildGEP2(
                 ctx.builder,
                 array.llvm_type,
                 array.llvm_value,
                 llvm_indexers.as_mut_ptr(),
                 llvm_indexers.len() as u32,
                 ANON
-            ));
+            );
+
+            return Ok(llvm_ptr);
         }
     }
 }
