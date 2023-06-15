@@ -62,7 +62,9 @@ impl LlvmTypes {
                 }
             },
             Some(ast::DataType::OneInternal(dtype)) => Ok(*dtype),
-            Some(ast::DataType::Array { item, from, to }) => todo!(),
+            Some(ast::DataType::Array { item, from, to }) => unsafe {
+                Ok(llvm::core::LLVMArrayType(self.get_type(Some(item.as_ref()))?, (to - from + 1) as u32))
+            },
             None => Ok(self.void),
         }
     }
@@ -100,6 +102,7 @@ pub fn gen_printf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -112,6 +115,7 @@ pub fn gen_scanf(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -123,6 +127,7 @@ pub fn gen_getchar(ctx: &mut GenContext) -> Result<TypedSymbol, GenError> {
         return Ok(TypedSymbol {
             llvm_type: llvm_fn_type,
             llvm_value: llvm_fn_value,
+            dtype: None,
         });
     }
 }
@@ -199,6 +204,7 @@ pub fn gen_readln(ctx: &mut GenContext, scanf: &TypedSymbol, getchar: &TypedSymb
         Ok(TypedSymbol {
             llvm_type: llvm_readln_fn_type,
             llvm_value: llvm_readln_fn_value,
+            dtype: None,
         })
     }
 }
@@ -207,13 +213,14 @@ pub struct CallableContext {
     callable_name: String,
     callable: TypedSymbol,
     return_store: Option<TypedSymbol>,
-    params: Vec<(String, *mut llvm::LLVMType)>,
+    params: Vec<(String, *mut llvm::LLVMType, Option<ast::DataType>)>,
 }
 
 #[derive(Clone)]
 pub struct TypedSymbol {
     llvm_value: *mut llvm::LLVMValue,
     llvm_type: *mut llvm::LLVMType,
+    dtype: Option<ast::DataType>,
 }
 
 pub struct Scope<'a> {
@@ -367,7 +374,8 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &ast:
             &storage.name,
             TypedSymbol {
                 llvm_value: llvm_value,
-                llvm_type: llvm_type
+                llvm_type: llvm_type,
+                dtype: Some(storage.dtype.clone()),
             }
         )?;
 
@@ -453,6 +461,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                 let my_symbol = TypedSymbol {
                     llvm_type: llvm_fn_type,
                     llvm_value: llvm_fn_value,
+                    dtype: None,
                 };
                 scope.set(&self.name, my_symbol.clone())?;
                 my_symbol
@@ -472,8 +481,10 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
 
             let mut inner_scope = scope.sub();
             let params = self.params.iter().map(
-                |(pname, ptype)| ctx.types.get_type(Some(ptype)).map(|llvm_type| (pname.to_owned(), llvm_type))
-            ).collect::<Result<Vec<(String, *mut llvm::LLVMType)>, GenError>>()?;
+                |(pname, ptype)| ctx.types.get_type(Some(ptype)).map(
+                    |llvm_type| (pname.to_owned(), llvm_type, Some(ptype.clone()))
+                )
+            ).collect::<Result<Vec<_>, GenError>>()?;
 
             unsafe {
                 let bb = llvm::core::LLVMAppendBasicBlockInContext(
@@ -501,6 +512,7 @@ impl CodeGen<()> for ast::CallableDeclarationNode {
                         return_store: Some(TypedSymbol {
                             llvm_value: llvm_value,
                             llvm_type: llvm_type,
+                            dtype: Some(ret_type.clone()),
                         }),
                         params: params,
                     });
@@ -538,15 +550,16 @@ impl CodeGen<bool> for ast::CallableImplementationNode {
 
         unsafe {
             // allocate local variables for parameters and copy them
-            for (i, (pname, ptype)) in params.iter().enumerate() {
-                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, *ptype, ANON);
+            for (i, (pname, ptype_llvm, ptype_ast)) in params.iter().enumerate() {
+                let llvm_place = llvm::core::LLVMBuildAlloca(ctx.builder, *ptype_llvm, ANON);
                 let llvm_param = llvm::core::LLVMGetParam(callable.llvm_value, i as u32);
                 llvm::core::LLVMBuildStore(ctx.builder, llvm_param, llvm_place);
                 scope.set(
                     pname,
                     TypedSymbol {
-                        llvm_type: *ptype,
+                        llvm_type: *ptype_llvm,
                         llvm_value: llvm_place,
+                        dtype: ptype_ast.clone(),
                     }
                 )?;
             }
@@ -561,6 +574,7 @@ impl CodeGen<bool> for ast::CallableImplementationNode {
                     TypedSymbol {
                         llvm_type: llvm_type,
                         llvm_value: llvm_place,
+                        dtype: Some(local.dtype.clone()),
                     }
                 )?;
             }
@@ -698,7 +712,7 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
         match self {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
-            ast::ExpressionNode::ArrayAccess(node) => todo!(),
+            ast::ExpressionNode::ArrayAccess(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
@@ -861,6 +875,11 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::CallNode {
     }
 }
 
+impl CodeGen<*mut llvm::LLVMValue> for ast::ArrayAccessNode {
+    fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
+    }
+}
+
 impl CodeGen<*mut llvm::LLVMValue> for ast::BinaryOperatorNode {
     fn gen(&self, ctx: &mut GenContext, scope: Option<&mut Scope>) -> Result<*mut llvm::LLVMValue, GenError> {
         let mut scope = scope.ok_or_else(|| GenError::InvalidContext.panic_or_dont())?;
@@ -920,7 +939,11 @@ impl CodeGen<()> for ast::ForLoopNode {
 
             // varref will be the only one of the three above that will be accessible in mila source code
             let mut inner_scope = scope.sub();
-            inner_scope.set(&self.iterating.name, TypedSymbol { llvm_value: varref, llvm_type: ctx.types.i64 })?;
+            inner_scope.set(&self.iterating.name, TypedSymbol {
+                llvm_value: varref,
+                llvm_type: ctx.types.i64,
+                dtype: Some(ast::DataType::One("integer".to_owned())),
+            })?;
             inner_scope.break_target = Some(rest_block);
 
             // BEGIN INNER BLOCK
