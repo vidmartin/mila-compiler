@@ -16,6 +16,7 @@ pub enum SyntaxError {
 
 impl SyntaxError {
     pub fn panic_or_dont(self) -> Self {
+        // panic!("syntax error: {self:?}");
         self
     }
 }
@@ -692,7 +693,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e0()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -751,7 +752,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e1()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -839,7 +840,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 self.expect_token(&op)?;
 
                 let rhs = self.parse_e4()?;
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
 
                 Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
                     kind: opkind,
@@ -882,7 +883,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e4()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -949,7 +950,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
                 let rhs = self.parse_e5()?;
 
                 if let ExpressionNode::BinaryOperator(BinaryOperatorNode {
@@ -1011,7 +1012,7 @@ impl<'a, TLex : Iterator<Item = Token>> Parser<'a, TLex> {
                 let op = op.clone();
                 self.expect_token(&op)?;
 
-                let opkind: BinaryOperatorKind = op.try_into().or(Err(SyntaxError::ImplementationError.panic_or_dont()))?;
+                let opkind: BinaryOperatorKind = op.try_into().or_else(|_| Err(SyntaxError::ImplementationError.panic_or_dont()))?;
 
                 // hack for implementing unary + / - :
                 Ok(ExpressionNode::BinaryOperator(BinaryOperatorNode {
