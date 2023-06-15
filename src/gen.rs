@@ -77,6 +77,21 @@ impl LlvmTypes {
             None => Ok(self.void),
         }
     }
+
+    pub fn get_default_value(&self, dtype: &ast::DataType) -> Result<*mut llvm::LLVMValue, GenError> {
+        match dtype {
+            ast::DataType::OneInternal(_) | ast::DataType::One(_) => unsafe {
+                Ok(llvm::core::LLVMConstInt(self.i64, 0, 0))
+            },
+            ast::DataType::Array { item, from, to } => unsafe {
+                let mut vals: Vec<*mut llvm::LLVMValue> = Vec::new();
+                for _ in *from..=*to {
+                    vals.push(self.get_default_value(item.as_ref())?);
+                }
+                Ok(llvm::core::LLVMConstArray(self.get_type(Some(item))?, vals.as_mut_ptr(), vals.len() as u32))
+            },
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -374,8 +389,7 @@ pub fn add_global(ctx: &mut GenContext, global_scope: &mut Scope, storage: &ast:
                 init.gen(ctx, Some(global_scope))?
             } else {
                 // if we don't set initializer, llc command will ignore it
-                // TODO: more robust default value providers
-                llvm::core::LLVMConstInt(llvm_type, 0, 0)
+                ctx.types.get_default_value(&storage.dtype)?
             }
         ); 
 
