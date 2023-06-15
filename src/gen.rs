@@ -656,7 +656,14 @@ impl CodeGen<()> for ast::AssignmentNode {
                 }
                 Ok(())
             },
-            ast::ExpressionNode::ArrayAccess(_) => todo!(),
+            ast::ExpressionNode::ArrayAccess(node) => {
+                let rhs = self.value.gen(ctx, Some(&mut scope))?;
+                let storage = node.gen(ctx, Some(&mut scope))?;
+                unsafe {
+                    llvm::core::LLVMBuildStore(ctx.builder, rhs, storage);
+                }
+                Ok(())
+            },
             _ => Err(GenError::InvalidAssignment.panic_or_dont())
         }
     }
@@ -712,7 +719,16 @@ impl CodeGen<*mut llvm::LLVMValue> for ast::ExpressionNode {
         match self {
             ast::ExpressionNode::Call(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Literal(node) => Ok(node.gen(ctx, scope)?),
-            ast::ExpressionNode::ArrayAccess(node) => Ok(node.gen(ctx, scope)?),
+            ast::ExpressionNode::ArrayAccess(node) => unsafe {
+                let llvm_ptr = node.gen(ctx, scope)?; // this is probably pointer, so we need to add a load instruction
+                let llvm_val = llvm::core::LLVMBuildLoad2(
+                    ctx.builder,
+                    llvm::core::LLVMGetElementType(llvm::core::LLVMTypeOf(llvm_ptr)),
+                    llvm_ptr,
+                    ANON
+                );
+                Ok(llvm_val)
+            },
             ast::ExpressionNode::BinaryOperator(node) => Ok(node.gen(ctx, scope)?),
             ast::ExpressionNode::Access(name) => unsafe {
                 let scope = scope.ok_or_else(|| GenError::InvalidScope.panic_or_dont())?;
@@ -791,7 +807,7 @@ fn gen_readln_macro(pseudocall: &ast::CallNode, ctx: &mut GenContext, scope: &mu
         ast::ExpressionNode::Access(name) => scope.get(&name).ok_or_else(
             || GenError::UndefinedSymbol(name.clone()).panic_or_dont()
         )?.llvm_value,
-        ast::ExpressionNode::ArrayAccess(_) => todo!(),
+        ast::ExpressionNode::ArrayAccess(node) => node.gen(ctx, Some(scope))?,
         _ => Err(GenError::InvalidMacroUsage.panic_or_dont())?,
     };
 
