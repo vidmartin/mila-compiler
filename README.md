@@ -43,8 +43,8 @@ I added some extra sample files:
 
 I first guessed the grammar for the Mila language and then converted it to (almost) LL(1). The resulting grammar is in the `grammar.txt` file. I then used [the tool](https://pages.fit.cvut.cz/peckato1/parsingtbl/) to generate a parsing table, which I hard-coded into my compiler.
 
-I tried to separate code reasonably into files. This is the meaning of each file:
-- `main.rs`: the entry point that used the tools provided by the other files to read standard input and compile it into something
+I tried to separate code reasonably into individual files. This is the meaning of each file:
+- `main.rs`: the entry point that uses the tools provided by the other files to read standard input and compile it into something
 - `tokens.rs`: the tokens that we recognize
 - `lex.rs`: code for the lexer - an object that reads characters and outputs a stream of tokens
 - `syn.rs`: code for the parser - takes a lexer, reads its output and transforms it into an AST
